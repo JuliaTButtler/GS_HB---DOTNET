@@ -8,10 +8,8 @@ public class CategoriaSolicitacaoConfiguration : IEntityTypeConfiguration<Catego
 {
     public void Configure(EntityTypeBuilder<CategoriaSolicitacao> builder)
     {
-        builder.ToTable("CATEGORIA_SOLICITACAO_HB", t =>
-        {
-            t.HasCheckConstraint("CHK_CATEGORIA_HB_ATIVO", "ATIVO IN ('S', 'N')");
-        });
+        // CHECK constraints ficam na migration via Sql() — HasCheckConstraint quebra o EXECUTE IMMEDIATE do Oracle.
+        builder.ToTable("CATEGORIA_SOLICITACAO_HB");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
@@ -21,15 +19,18 @@ public class CategoriaSolicitacaoConfiguration : IEntityTypeConfiguration<Catego
         builder.Property(x => x.Nome)
             .HasColumnName("NOME")
             .HasMaxLength(80)
+            .IsUnicode(false)
             .IsRequired();
 
         builder.Property(x => x.Descricao)
             .HasColumnName("DESCRICAO")
-            .HasMaxLength(255);
+            .HasMaxLength(255)
+            .IsUnicode(false);
 
         builder.Property(x => x.Ativo)
             .HasColumnName("ATIVO")
             .HasMaxLength(1)
+            .IsUnicode(false)
             .IsRequired()
             .HasDefaultValue(AtivoFlags.Sim);
 

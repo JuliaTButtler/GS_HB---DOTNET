@@ -15,12 +15,12 @@ public class PontoMonitoramentoRefConfiguration : IEntityTypeConfiguration<Ponto
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("ID");
-        builder.Property(x => x.Nome).HasColumnName("NOME").HasMaxLength(120).IsRequired();
-        builder.Property(x => x.Subprefeitura).HasColumnName("SUBPREFEITURA").HasMaxLength(80).IsRequired();
-        builder.Property(x => x.Bairro).HasColumnName("BAIRRO").HasMaxLength(80).IsRequired();
-        builder.Property(x => x.Zona).HasColumnName("ZONA").HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Nome).HasColumnName("NOME").HasMaxLength(120).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Subprefeitura).HasColumnName("SUBPREFEITURA").HasMaxLength(80).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Bairro).HasColumnName("BAIRRO").HasMaxLength(80).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Zona).HasColumnName("ZONA").HasMaxLength(20).IsUnicode(false).IsRequired();
         builder.Property(x => x.Latitude).HasColumnName("LATITUDE").HasPrecision(10, 7).IsRequired();
         builder.Property(x => x.Longitude).HasColumnName("LONGITUDE").HasPrecision(10, 7).IsRequired();
-        builder.Property(x => x.Ativo).HasColumnName("ATIVO").HasMaxLength(1).IsRequired();
+        builder.Property(x => x.Ativo).HasColumnName("ATIVO").HasMaxLength(1).IsUnicode(false).IsRequired();
     }
 }

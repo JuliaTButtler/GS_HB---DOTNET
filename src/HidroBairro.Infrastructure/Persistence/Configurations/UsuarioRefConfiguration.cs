@@ -15,9 +15,9 @@ public class UsuarioRefConfiguration : IEntityTypeConfiguration<UsuarioRef>
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("ID");
-        builder.Property(x => x.Nome).HasColumnName("NOME").HasMaxLength(120).IsRequired();
-        builder.Property(x => x.Email).HasColumnName("EMAIL").HasMaxLength(180).IsRequired();
-        builder.Property(x => x.Papel).HasColumnName("PAPEL").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.Ativo).HasColumnName("ATIVO").HasMaxLength(1).IsRequired();
+        builder.Property(x => x.Nome).HasColumnName("NOME").HasMaxLength(120).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Email).HasColumnName("EMAIL").HasMaxLength(180).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Papel).HasColumnName("PAPEL").HasMaxLength(20).IsUnicode(false).IsRequired();
+        builder.Property(x => x.Ativo).HasColumnName("ATIVO").HasMaxLength(1).IsUnicode(false).IsRequired();
     }
 }

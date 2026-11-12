@@ -72,6 +72,9 @@ Alternativa TNS: `Data Source=ORCL;` (se tiver `tnsnames.ora`).
 
 **Não commite senha real.** Troque o placeholder só na sua máquina (ou use User Secrets).
 
+> **Oracle + CHECK:** não use `HasCheckConstraint` no Fluent — as aspas (`'S'`) quebram o `EXECUTE IMMEDIATE` do provider (ORA-06550). Os CHECKs vão na migration via `Sql()` com `''S''`.  
+> **Timestamps:** `CRIADO_EM` / `ATUALIZADO_EM` têm `DEFAULT CURRENT_TIMESTAMP` (Initial + migration `AddTimestampDefaults` para bases já criadas).
+
 ### Comandos de migration (você roda)
 
 Na raiz do repo (`F:\GS_HB - DOTNET`), com a API parada:

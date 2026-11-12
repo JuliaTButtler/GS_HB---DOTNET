@@ -8,16 +8,8 @@ public class SolicitacaoServicoConfiguration : IEntityTypeConfiguration<Solicita
 {
     public void Configure(EntityTypeBuilder<SolicitacaoServico> builder)
     {
-        builder.ToTable("SOLICITACAO_SERVICO_HB", t =>
-        {
-            t.HasCheckConstraint(
-                "CHK_SOLICITACAO_HB_STATUS",
-                "STATUS IN ('RECEBIDA', 'EM_VISTORIA', 'CONCLUIDA', 'CANCELADA')");
-
-            t.HasCheckConstraint(
-                "CHK_SOLICITACAO_HB_LOCAL",
-                "PONTO_ID IS NOT NULL OR (LATITUDE IS NOT NULL AND LONGITUDE IS NOT NULL)");
-        });
+        // CHECK constraints ficam na migration via Sql() — HasCheckConstraint quebra o EXECUTE IMMEDIATE do Oracle.
+        builder.ToTable("SOLICITACAO_SERVICO_HB");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
@@ -27,6 +19,7 @@ public class SolicitacaoServicoConfiguration : IEntityTypeConfiguration<Solicita
         builder.Property(x => x.Protocolo)
             .HasColumnName("PROTOCOLO")
             .HasMaxLength(30)
+            .IsUnicode(false)
             .IsRequired();
 
         builder.Property(x => x.UsuarioId)
@@ -43,11 +36,13 @@ public class SolicitacaoServicoConfiguration : IEntityTypeConfiguration<Solicita
         builder.Property(x => x.Titulo)
             .HasColumnName("TITULO")
             .HasMaxLength(120)
+            .IsUnicode(false)
             .IsRequired();
 
         builder.Property(x => x.Descricao)
             .HasColumnName("DESCRICAO")
             .HasMaxLength(1000)
+            .IsUnicode(false)
             .IsRequired();
 
         builder.Property(x => x.Latitude)
@@ -61,19 +56,23 @@ public class SolicitacaoServicoConfiguration : IEntityTypeConfiguration<Solicita
         builder.Property(x => x.Status)
             .HasColumnName("STATUS")
             .HasMaxLength(20)
+            .IsUnicode(false)
             .IsRequired()
             .HasDefaultValue(SolicitacaoStatus.Recebida);
 
         builder.Property(x => x.IdempotencyKey)
             .HasColumnName("IDEMPOTENCY_KEY")
-            .HasMaxLength(80);
+            .HasMaxLength(80)
+            .IsUnicode(false);
 
         builder.Property(x => x.CriadoEm)
             .HasColumnName("CRIADO_EM")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .IsRequired();
 
         builder.Property(x => x.AtualizadoEm)
             .HasColumnName("ATUALIZADO_EM")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .IsRequired();
 
         builder.HasIndex(x => x.Protocolo)

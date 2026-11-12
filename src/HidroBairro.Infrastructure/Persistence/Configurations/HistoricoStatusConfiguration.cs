@@ -8,16 +8,8 @@ public class HistoricoStatusConfiguration : IEntityTypeConfiguration<HistoricoSt
 {
     public void Configure(EntityTypeBuilder<HistoricoStatus> builder)
     {
-        builder.ToTable("HISTORICO_STATUS_HB", t =>
-        {
-            t.HasCheckConstraint(
-                "CHK_HIST_HB_STATUS_NOVO",
-                "STATUS_NOVO IN ('RECEBIDA', 'EM_VISTORIA', 'CONCLUIDA', 'CANCELADA')");
-
-            t.HasCheckConstraint(
-                "CHK_HIST_HB_STATUS_ANT",
-                "STATUS_ANTERIOR IS NULL OR STATUS_ANTERIOR IN ('RECEBIDA', 'EM_VISTORIA', 'CONCLUIDA', 'CANCELADA')");
-        });
+        // CHECK constraints ficam na migration via Sql() — HasCheckConstraint quebra o EXECUTE IMMEDIATE do Oracle.
+        builder.ToTable("HISTORICO_STATUS_HB");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
@@ -30,11 +22,13 @@ public class HistoricoStatusConfiguration : IEntityTypeConfiguration<HistoricoSt
 
         builder.Property(x => x.StatusAnterior)
             .HasColumnName("STATUS_ANTERIOR")
-            .HasMaxLength(20);
+            .HasMaxLength(20)
+            .IsUnicode(false);
 
         builder.Property(x => x.StatusNovo)
             .HasColumnName("STATUS_NOVO")
             .HasMaxLength(20)
+            .IsUnicode(false)
             .IsRequired();
 
         builder.Property(x => x.UsuarioId)
@@ -43,10 +37,12 @@ public class HistoricoStatusConfiguration : IEntityTypeConfiguration<HistoricoSt
 
         builder.Property(x => x.Observacao)
             .HasColumnName("OBSERVACAO")
-            .HasMaxLength(500);
+            .HasMaxLength(500)
+            .IsUnicode(false);
 
         builder.Property(x => x.CriadoEm)
             .HasColumnName("CRIADO_EM")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .IsRequired();
 
         builder.HasOne(x => x.Usuario)
