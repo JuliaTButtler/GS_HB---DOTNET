@@ -127,7 +127,7 @@ dotnet test HidroBairro.sln
 1. ~~Scaffold Clean Architecture~~ ✅  
 2. ~~Domain (entidades + rules)~~ ✅  
 3. ~~DbContext + configs Oracle (migration: você aplica)~~ ✅  
-4. Application services + idempotência  
+4. ~~Application (repos, UoW, services, idempotência, testes)~~ ✅  
 5. Endpoints Minimal API + Swagger  
 6. Rate limiting + Health Checks  
 7. JWT alinhado ao Java  
