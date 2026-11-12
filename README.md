@@ -11,7 +11,7 @@ Auth/JWT é emitido pela API Java; risco/alertas/IA ficam no Java. Este backend 
 |---|---|
 | Runtime | .NET 8 (`net8.0`) + `global.json` |
 | Host | ASP.NET Core **Minimal APIs** |
-| ORM | EF Core + Oracle (próximas etapas) |
+| ORM | EF Core 8 + Oracle.EntityFrameworkCore |
 | Auth | JWT Bearer (validação; issuer = Java) |
 | Testes | xUnit + WebApplicationFactory |
 
@@ -44,7 +44,75 @@ Dependências: `API → Application/Infrastructure` · `Infrastructure → Appli
 Rules: `SolicitacaoRules`, `StatusTransitionRules`, `IdempotencyRules`, `CategoriaRules`.  
 Status: `RECEBIDA` → `EM_VISTORIA` → `CONCLUIDA` (ou `CANCELADA`).
 
-`COMMENT ON TABLE` não fica no Domain — entra na migration (etapa 3) via `migrationBuilder.Sql(...)`.
+## Persistência / Oracle (etapa 3)
+
+`AppDbContext` + Fluent API em `src/HidroBairro.Infrastructure/Persistence/`.  
+Migrations criam só as 3 tabelas .NET. `USUARIO_HB` e `PONTO_MONITORAMENTO_HB` estão com `ExcludeFromMigrations` (já existem no schema Java).
+
+### Onde configurar o login Oracle
+
+Edite a connection string em:
+
+- `src/HidroBairro.API/appsettings.Development.json` (local — preferencial)
+- ou `src/HidroBairro.API/appsettings.json`
+
+```json
+"ConnectionStrings": {
+  "OracleConnection": "User Id=SEU_USUARIO;Password=SUA_SENHA;Data Source=localhost:1521/XEPDB1;"
+}
+```
+
+| Parte | Exemplo | Significado |
+|---|---|---|
+| `User Id` | `HIDRO` | usuário Oracle do schema |
+| `Password` | `...` | senha |
+| `Data Source` | `localhost:1521/XEPDB1` | host:porta/service name (XEPDB1, ORCLPDB1, etc.) |
+
+Alternativa TNS: `Data Source=ORCL;` (se tiver `tnsnames.ora`).
+
+**Não commite senha real.** Troque o placeholder só na sua máquina (ou use User Secrets).
+
+### Comandos de migration (você roda)
+
+Na raiz do repo (`F:\GS_HB - DOTNET`), com a API parada:
+
+```powershell
+# (uma vez) ferramenta EF
+dotnet tool install --global dotnet-ef --version 8.0.11
+
+# 1) Gera a migration (NÃO aplica no banco)
+dotnet ef migrations add InitialZeladoria `
+  --project src/HidroBairro.Infrastructure `
+  --startup-project src/HidroBairro.API `
+  --output-dir Persistence/Migrations
+
+# 2) Revise o arquivo gerado em Persistence/Migrations:
+#    - deve criar CATEGORIA_SOLICITACAO_HB, SOLICITACAO_SERVICO_HB, HISTORICO_STATUS_HB
+#    - NÃO deve CREATE TABLE USUARIO_HB / PONTO_MONITORAMENTO_HB
+#    - FKs para USUARIO_HB e PONTO_MONITORAMENTO_HB são esperadas
+
+# 3) Aplica no Oracle (só quando a connection string estiver certa)
+dotnet ef database update `
+  --project src/HidroBairro.Infrastructure `
+  --startup-project src/HidroBairro.API
+```
+
+Opcional no `Up()` da migration (COMMENT + seed):
+
+```csharp
+migrationBuilder.Sql("COMMENT ON TABLE CATEGORIA_SOLICITACAO_HB IS 'HidroBairro: categorias de solicitacao de zeladoria. Dominio DOTNET.'");
+migrationBuilder.Sql("COMMENT ON TABLE SOLICITACAO_SERVICO_HB IS 'HidroBairro: solicitacoes de zeladoria. Dominio DOTNET. IDEMPOTENCY_KEY evita create duplicado.'");
+migrationBuilder.Sql("COMMENT ON TABLE HISTORICO_STATUS_HB IS 'HidroBairro: historico de status das solicitacoes. Dominio DOTNET.'");
+
+migrationBuilder.Sql(@"
+INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Bueiro entupido', 'Bueiro ou galeria obstruidos', 'S');
+INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Boca de lobo', 'Boca de lobo entupida ou danificada', 'S');
+INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Rua alagada', 'Via intransitavel por alagamento', 'S');
+INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Ponto critico', 'Ponto de risco recorrente no bairro', 'S');
+");
+```
+
+Pré-requisito: tabelas Java (`USUARIO_HB`, `PONTO_MONITORAMENTO_HB`, …) já criadas no mesmo schema.
 
 ## Rodar
 
@@ -67,7 +135,7 @@ dotnet test HidroBairro.sln
 
 1. ~~Scaffold Clean Architecture~~ ✅  
 2. ~~Domain (entidades + rules)~~ ✅  
-3. DbContext + migrations Oracle (`CATEGORIA` / `SOLICITACAO` / `HISTORICO` + COMMENT ON)  
+3. ~~DbContext + configs Oracle (migration: você aplica)~~ ✅  
 4. Application services + idempotência  
 5. Endpoints Minimal API + Swagger  
 6. Rate limiting + Health Checks  

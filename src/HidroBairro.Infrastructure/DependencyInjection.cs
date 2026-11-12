@@ -1,3 +1,5 @@
+using HidroBairro.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,8 +11,11 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // DbContext Oracle, repositórios e Unit of Work entram na etapa de persistência.
-        _ = configuration;
+        var connectionString = configuration.GetConnectionString("OracleConnection");
+
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseOracle(connectionString));
+
         return services;
     }
 }
