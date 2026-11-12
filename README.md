@@ -73,7 +73,8 @@ Alternativa TNS: `Data Source=ORCL;` (se tiver `tnsnames.ora`).
 **Não commite senha real.** Troque o placeholder só na sua máquina (ou use User Secrets).
 
 > **Oracle + CHECK:** não use `HasCheckConstraint` no Fluent — as aspas (`'S'`) quebram o `EXECUTE IMMEDIATE` do provider (ORA-06550). Os CHECKs vão na migration via `Sql()` com `''S''`.  
-> **Timestamps:** `CRIADO_EM` / `ATUALIZADO_EM` têm `DEFAULT CURRENT_TIMESTAMP` (Initial + migration `AddTimestampDefaults` para bases já criadas).
+> **Timestamps:** `CRIADO_EM` / `ATUALIZADO_EM` têm `DEFAULT CURRENT_TIMESTAMP` na `InitialZeladoria`.  
+> **Seed de categoria:** fica no script SQL do grupo — a migration **não** insere categorias.
 
 ### Comandos de migration (você roda)
 
@@ -100,20 +101,7 @@ dotnet ef database update `
   --startup-project src/HidroBairro.API
 ```
 
-Opcional no `Up()` da migration (COMMENT + seed):
-
-```csharp
-migrationBuilder.Sql("COMMENT ON TABLE CATEGORIA_SOLICITACAO_HB IS 'HidroBairro: categorias de solicitacao de zeladoria. Dominio DOTNET.'");
-migrationBuilder.Sql("COMMENT ON TABLE SOLICITACAO_SERVICO_HB IS 'HidroBairro: solicitacoes de zeladoria. Dominio DOTNET. IDEMPOTENCY_KEY evita create duplicado.'");
-migrationBuilder.Sql("COMMENT ON TABLE HISTORICO_STATUS_HB IS 'HidroBairro: historico de status das solicitacoes. Dominio DOTNET.'");
-
-migrationBuilder.Sql(@"
-INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Bueiro entupido', 'Bueiro ou galeria obstruidos', 'S');
-INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Boca de lobo', 'Boca de lobo entupida ou danificada', 'S');
-INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Rua alagada', 'Via intransitavel por alagamento', 'S');
-INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES ('Ponto critico', 'Ponto de risco recorrente no bairro', 'S');
-");
-```
+A `InitialZeladoria` já aplica COMMENT ON + CHECKs. Categorias: use o script SQL do grupo após o `database update`.
 
 Pré-requisito: tabelas Java (`USUARIO_HB`, `PONTO_MONITORAMENTO_HB`, …) já criadas no mesmo schema.
 

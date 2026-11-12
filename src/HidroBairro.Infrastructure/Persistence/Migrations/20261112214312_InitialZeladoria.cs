@@ -143,6 +143,7 @@ namespace HidroBairro.Infrastructure.Persistence.Migrations
                 unique: true);
 
             // CHECKs / COMMENT via PL/SQL com aspas duplicadas (EXECUTE IMMEDIATE do Oracle EF).
+            // Seed de CATEGORIA fica no script SQL do grupo — não na migration.
             migrationBuilder.Sql("""
                 BEGIN
                   EXECUTE IMMEDIATE 'ALTER TABLE CATEGORIA_SOLICITACAO_HB ADD CONSTRAINT CHK_CATEGORIA_HB_ATIVO CHECK (ATIVO IN (''S'', ''N''))';
@@ -154,11 +155,6 @@ namespace HidroBairro.Infrastructure.Persistence.Migrations
                   EXECUTE IMMEDIATE 'COMMENT ON TABLE CATEGORIA_SOLICITACAO_HB IS ''HidroBairro: categorias de solicitacao de zeladoria. Dominio DOTNET.''';
                   EXECUTE IMMEDIATE 'COMMENT ON TABLE SOLICITACAO_SERVICO_HB IS ''HidroBairro: solicitacoes de zeladoria. Dominio DOTNET. IDEMPOTENCY_KEY evita create duplicado.''';
                   EXECUTE IMMEDIATE 'COMMENT ON TABLE HISTORICO_STATUS_HB IS ''HidroBairro: historico de status das solicitacoes. Dominio DOTNET.''';
-
-                  EXECUTE IMMEDIATE 'INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES (''Bueiro entupido'', ''Bueiro ou galeria obstruidos'', ''S'')';
-                  EXECUTE IMMEDIATE 'INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES (''Boca de lobo'', ''Boca de lobo entupida ou danificada'', ''S'')';
-                  EXECUTE IMMEDIATE 'INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES (''Rua alagada'', ''Via intransitavel por alagamento'', ''S'')';
-                  EXECUTE IMMEDIATE 'INSERT INTO CATEGORIA_SOLICITACAO_HB (NOME, DESCRICAO, ATIVO) VALUES (''Ponto critico'', ''Ponto de risco recorrente no bairro'', ''S'')';
                 END;
                 """);
         }
