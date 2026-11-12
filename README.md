@@ -120,12 +120,53 @@ Contrato para Mobile (fetch/axios) — **sem JWT nesta etapa**.
 | POST | `/api/solicitacoes/{id}/cancelar` | Query opcional `observacao` |
 | PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |
 
-Headers de Development (no lugar do JWT):
+### Testar no Swagger (sem Java)
 
-| Header | Default | Uso |
+1. `dotnet run --project src/HidroBairro.API --launch-profile http`
+2. Abra `http://localhost:5080/swagger` → **Authorize**
+
+| No Swagger | Header | O que é | Default |
+|---|---|---|---|
+| **DevUser** | `X-User-Id` | Id em `USUARIO_HB` | `1` |
+| **DevRole** | `X-User-Role` | `CIDADAO` ou `GESTOR` | `CIDADAO` |
+
+Use um **DevUser** que exista no seed e um **DevRole** coerente com o `PAPEL` da linha.  
+Cidadão só vê as **próprias** solicitações; gestor vê qualquer uma (`PATCH …/status` operacional).
+
+Sugestão rápida:
+
+| Cenário | DevUser | DevRole |
 |---|---|---|
-| `X-User-Id` | `1` | Id do cidadão/gestor (precisa existir em `USUARIO_HB` por FK) |
-| `X-User-Role` | `CIDADAO` | `CIDADAO` ou `GESTOR` |
+| Cidadão | `1` (Carla Souza) | `CIDADAO` |
+| Gestor | `12` (Bruno Teixeira) | `GESTOR` |
+
+Usuários do seed atual (`USUARIO_HB` — domínio Java; .NET só usa o id na FK):
+
+| ID | Nome | Email | Papel | Ativo |
+|---|---|---|---|---|
+| 1 | Carla Souza | carla.souza@email.com | CIDADAO | S |
+| 2 | Joao Mendes | joao.mendes@email.com | CIDADAO | S |
+| 3 | Ana Ribeiro | ana.ribeiro@email.com | CIDADAO | S |
+| 4 | Pedro Lima | pedro.lima@email.com | CIDADAO | S |
+| 5 | Fernanda Dias | fernanda.dias@email.com | CIDADAO | S |
+| 6 | Lucas Alves | lucas.alves@email.com | CIDADAO | S |
+| 7 | Mariana Costa | mariana.costa@email.com | CIDADAO | S |
+| 8 | Rafael Nunes | rafael.nunes@email.com | CIDADAO | S |
+| 9 | Beatriz Rocha | beatriz.rocha@email.com | CIDADAO | S |
+| 10 | Thiago Martins | thiago.martins@email.com | CIDADAO | S |
+| 11 | Patricia Gomes | patricia.gomes@email.com | CIDADAO | S |
+| 12 | Bruno Teixeira | bruno.teixeira@email.com | GESTOR | S |
+| 13 | Camila Freitas | camila.freitas@email.com | GESTOR | S |
+| 14 | Diego Araujo | diego.araujo@email.com | CIDADAO | S |
+| 15 | Helena Pinto | helena.pinto@email.com | CIDADAO | N |
+
+Para conferir no Oracle (opcional):
+
+```sql
+SELECT ID, NOME, EMAIL, PAPEL, ATIVO
+FROM USUARIO_HB
+ORDER BY ID;
+```
 
 Status de erro: **400** regra, **403** forbidden, **404** not found, **409** conflict.
 
