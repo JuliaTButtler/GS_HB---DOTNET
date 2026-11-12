@@ -115,6 +115,7 @@ Contrato para Mobile (fetch/axios) — **sem JWT nesta etapa**.
 | POST | `/api/solicitacoes` | Header **`Idempotency-Key`** obrigatório → **201**; replay da mesma key → **200** (não duplica) |
 | GET | `/api/solicitacoes` | Query: `page`, `pageSize`, `status`, `somenteDoUsuario` |
 | GET | `/api/solicitacoes/{id}` | |
+| GET | `/api/solicitacoes/{id}/historico` | Trilha de status (abertura → mudanças) |
 | PUT | `/api/solicitacoes/{id}` | Edita título/descrição se `RECEBIDA` |
 | POST | `/api/solicitacoes/{id}/cancelar` | Query opcional `observacao` |
 | PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |

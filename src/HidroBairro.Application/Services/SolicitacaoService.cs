@@ -112,6 +112,24 @@ public sealed class SolicitacaoService : ISolicitacaoService
         return ServiceResult<SolicitacaoDto>.Success(SolicitacaoMapper.ToDto(solicitacao));
     }
 
+    public async Task<ServiceResult<IReadOnlyList<HistoricoStatusDto>>> ListHistoricoAsync(
+        long id,
+        long usuarioId,
+        string papel,
+        CancellationToken cancellationToken = default)
+    {
+        var solicitacao = await _solicitacoes.GetByIdAsync(id, cancellationToken);
+        if (solicitacao is null)
+            return ServiceResult<IReadOnlyList<HistoricoStatusDto>>.AsNotFound($"Solicitação '{id}' não encontrada.");
+
+        if (!PodeVisualizar(solicitacao, usuarioId, papel))
+            return ServiceResult<IReadOnlyList<HistoricoStatusDto>>.AsForbidden("Você não pode visualizar esta solicitação.");
+
+        var historicos = await _historicos.ListBySolicitacaoIdAsync(id, cancellationToken);
+        var dtos = historicos.Select(HistoricoStatusMapper.ToDto).ToList();
+        return ServiceResult<IReadOnlyList<HistoricoStatusDto>>.Success(dtos);
+    }
+
     public async Task<ServiceResult<PagedResult<SolicitacaoDto>>> ListAsync(
         SolicitacaoListQuery query,
         long usuarioId,

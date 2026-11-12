@@ -93,6 +93,26 @@ public static class SolicitacaoEndpoints
         .Produces(StatusCodes.Status404NotFound)
         .Produces(StatusCodes.Status403Forbidden);
 
+        group.MapGet("/{id:long}/historico", async (
+            long id,
+            HttpContext http,
+            ISolicitacaoService service,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await service.ListHistoricoAsync(
+                id,
+                http.GetUsuarioId(),
+                http.GetPapel(),
+                cancellationToken);
+
+            return result.ToHttpResult();
+        })
+        .WithName("ListSolicitacaoHistorico")
+        .WithSummary("Lista histórico de status da solicitação (ordem cronológica)")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces(StatusCodes.Status404NotFound);
+
         group.MapPut("/{id:long}", async (
             long id,
             UpdateSolicitacaoRequest request,

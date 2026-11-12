@@ -17,6 +17,12 @@ public interface ISolicitacaoService
         string papel,
         CancellationToken cancellationToken = default);
 
+    Task<ServiceResult<IReadOnlyList<HistoricoStatusDto>>> ListHistoricoAsync(
+        long id,
+        long usuarioId,
+        string papel,
+        CancellationToken cancellationToken = default);
+
     Task<ServiceResult<PagedResult<SolicitacaoDto>>> ListAsync(
         SolicitacaoListQuery query,
         long usuarioId,
