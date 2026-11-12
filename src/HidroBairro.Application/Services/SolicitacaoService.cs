@@ -84,7 +84,7 @@ public sealed class SolicitacaoService : ISolicitacaoService
             }, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return ServiceResult<SolicitacaoDto>.Success(SolicitacaoMapper.ToDto(solicitacao));
+            return ServiceResult<SolicitacaoDto>.CreatedSuccess(SolicitacaoMapper.ToDto(solicitacao));
         }
         catch (BusinessRuleException ex)
         {

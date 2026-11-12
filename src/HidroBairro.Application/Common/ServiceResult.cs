@@ -7,6 +7,7 @@ public class ServiceResult
     public bool NotFound { get; protected init; }
     public bool Conflict { get; protected init; }
     public bool Forbidden { get; protected init; }
+    public bool Created { get; protected init; }
 
     public static ServiceResult Success() => new() { Succeeded = true };
 
@@ -45,6 +46,13 @@ public sealed class ServiceResult<T> : ServiceResult
     public static ServiceResult<T> Success(T data) => new()
     {
         Succeeded = true,
+        Data = data
+    };
+
+    public static ServiceResult<T> CreatedSuccess(T data) => new()
+    {
+        Succeeded = true,
+        Created = true,
         Data = data
     };
 

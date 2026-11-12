@@ -62,6 +62,7 @@ public class SolicitacaoServiceTests
         var result = await _sut.CreateAsync(request, usuarioId: 3, idempotencyKey: "key-1");
 
         Assert.True(result.Succeeded);
+        Assert.True(result.Created);
         Assert.NotNull(result.Data);
         Assert.Equal(SolicitacaoStatus.Recebida, result.Data!.Status);
         Assert.Equal(2, result.Data.CategoriaId);
@@ -103,6 +104,7 @@ public class SolicitacaoServiceTests
         var result = await _sut.CreateAsync(request, usuarioId: 3, idempotencyKey: "key-dup");
 
         Assert.True(result.Succeeded);
+        Assert.False(result.Created);
         Assert.Equal(10, result.Data!.Id);
         Assert.Equal("HB-20261112-ABCDEF12", result.Data.Protocolo);
         _solicitacoes.Verify(

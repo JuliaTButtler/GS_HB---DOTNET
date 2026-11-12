@@ -105,9 +105,32 @@ A `InitialZeladoria` já aplica COMMENT ON + CHECKs. Categorias: use o script SQ
 
 Pré-requisito: tabelas Java (`USUARIO_HB`, `PONTO_MONITORAMENTO_HB`, …) já criadas no mesmo schema.
 
+## API HTTP + Swagger (etapa 5)
+
+Contrato para Mobile (fetch/axios) — **sem JWT nesta etapa**.
+
+| Método | Rota | Notas |
+|---|---|---|
+| GET | `/api/categorias` | Categorias ativas |
+| POST | `/api/solicitacoes` | Header **`Idempotency-Key`** obrigatório → **201**; replay da mesma key → **200** (não duplica) |
+| GET | `/api/solicitacoes` | Query: `page`, `pageSize`, `status`, `somenteDoUsuario` |
+| GET | `/api/solicitacoes/{id}` | |
+| PUT | `/api/solicitacoes/{id}` | Edita título/descrição se `RECEBIDA` |
+| POST | `/api/solicitacoes/{id}/cancelar` | Query opcional `observacao` |
+| PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |
+
+Headers de Development (no lugar do JWT):
+
+| Header | Default | Uso |
+|---|---|---|
+| `X-User-Id` | `1` | Id do cidadão/gestor (precisa existir em `USUARIO_HB` por FK) |
+| `X-User-Role` | `CIDADAO` | `CIDADAO` ou `GESTOR` |
+
+Status de erro: **400** regra, **403** forbidden, **404** not found, **409** conflict.
+
 ## Rodar
 
-Pré-requisito: .NET 8 SDK.
+Pré-requisito: .NET 8 SDK + Oracle com migration/seed aplicados.
 
 ```bash
 dotnet restore HidroBairro.sln
@@ -116,7 +139,15 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 ```
 
 - Base URL: `http://localhost:5080`
+- Swagger: `http://localhost:5080/swagger`
 - Smoke: `GET /` → `{ "service": "HidroBairro.API", "status": "ok" }`
+
+Validação rápida no Swagger:
+
+1. `GET /api/categorias`
+2. `POST /api/solicitacoes` com `Idempotency-Key: mobile-teste-1` + body (categoriaId + pontoId ou lat/long)
+3. `GET /api/solicitacoes`
+4. Repetir o mesmo POST/`Idempotency-Key` → mesmo recurso, sem duplicar
 
 ```bash
 dotnet test HidroBairro.sln
@@ -128,7 +159,7 @@ dotnet test HidroBairro.sln
 2. ~~Domain (entidades + rules)~~ ✅  
 3. ~~DbContext + configs Oracle (migration: você aplica)~~ ✅  
 4. ~~Application (repos, UoW, services, idempotência, testes)~~ ✅  
-5. Endpoints Minimal API + Swagger  
+5. ~~Endpoints Minimal API + Swagger~~ ✅  
 6. Rate limiting + Health Checks  
 7. JWT alinhado ao Java  
 8. Testes de negócio + README final / entrega  
