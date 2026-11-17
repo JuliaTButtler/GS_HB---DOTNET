@@ -1,12 +1,10 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-
 namespace HidroBairro.IntegrationTests;
 
-public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
+public class SmokeTests : IClassFixture<HidroBairroWebApplicationFactory>
 {
     private readonly HttpClient _client;
 
-    public SmokeTests(WebApplicationFactory<Program> factory)
+    public SmokeTests(HidroBairroWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
     }
