@@ -49,28 +49,37 @@ Status: `RECEBIDA` → `EM_VISTORIA` → `CONCLUIDA` (ou `CANCELADA`).
 `AppDbContext` + Fluent API em `src/HidroBairro.Infrastructure/Persistence/`.  
 Migrations criam só as 3 tabelas .NET. `USUARIO_HB` e `PONTO_MONITORAMENTO_HB` estão com `ExcludeFromMigrations` (já existem no schema Java).
 
-### Onde configurar o login Oracle
+### Credenciais (Oracle + JWT + health Java)
 
-Edite a connection string em:
+**As senhas / secret reais ficam no arquivo `IDENTIFICACAO_GRUPO.txt`** (entregue no `.zip` do Portal).  
+Os `appsettings*.json` no GitHub usam **placeholders** de propósito.
 
-- `src/HidroBairro.API/appsettings.Development.json` (local — preferencial)
-- ou `src/HidroBairro.API/appsettings.json`
+Copie do `.txt` para `src/HidroBairro.API/appsettings.Development.json`:
+
+| Campo no JSON | De onde vem no `.txt` |
+|---|---|
+| `ConnectionStrings:OracleConnection` | User Id + Password + Data Source |
+| `Auth:Key` | JWT secret Base64 (mesmo do Java) — **substitua** o placeholder `AAA...=` |
+| `Auth:KeyIsBase64` | `true` |
+| `HealthChecks:JavaApiUrl` | URL de health da API Java |
 
 ```json
 "ConnectionStrings": {
-  "OracleConnection": "User Id=SEU_USUARIO;Password=SUA_SENHA;Data Source=localhost:1521/XEPDB1;"
+  "OracleConnection": "User Id=SEU_RM;Password=SUA_SENHA;Data Source=oracle.fiap.com.br:1521/ORCL;"
+},
+"Auth": {
+  "Key": "COLE_AQUI_O_SECRET_BASE64_DO_TXT",
+  "KeyIsBase64": true,
+  "LocalIssuerEnabled": true
+},
+"HealthChecks": {
+  "JavaApiUrl": "http://localhost:8080/actuator/health"
 }
 ```
 
-| Parte | Exemplo | Significado |
-|---|---|---|
-| `User Id` | `HIDRO` | usuário Oracle do schema |
-| `Password` | `...` | senha |
-| `Data Source` | `localhost:1521/XEPDB1` | host:porta/service name (XEPDB1, ORCLPDB1, etc.) |
+O `Key` dummy `AAA...=` no repo só existe para o projeto compilar; **sem o secret real do `.txt`, token Java e dev-token de correção não batem.**
 
-Alternativa TNS: `Data Source=ORCL;` (se tiver `tnsnames.ora`).
-
-**Não commite senha real.** Troque o placeholder só na sua máquina (ou use User Secrets).
+**Não commite senha Oracle no GitHub público.**
 
 > **Oracle + CHECK:** não use `HasCheckConstraint` no Fluent — as aspas (`'S'`) quebram o `EXECUTE IMMEDIATE` do provider (ORA-06550). Os CHECKs vão na migration via `Sql()` com `''S''`.  
 > **Timestamps:** `CRIADO_EM` / `ATUALIZADO_EM` têm `DEFAULT CURRENT_TIMESTAMP` na `InitialZeladoria`.  
@@ -212,42 +221,65 @@ Defaults: **60 req / 60s** (produção); **120 / 60s** em Development.
 
 Para forçar 429 no teste: baixe `PermitLimit` para `5` em `appsettings.Development.json` e spamme `GET /api/categorias`.
 
-### Health checks
-| Rota | O que checa | Tags |
-|---|---|---|
-| `GET /health/live` | processo da API (`self`) | live |
-| `GET /health/ready` | Oracle (`AddDbContextCheck`) + opcional API Java | ready |
+### Health checks (API + Oracle + Java)
+| Rota | Checks |
+|---|---|
+| `GET /health/live` | `self` (processo) |
+| `GET /health/ready` | `oracle` (EF/DbContext) + `java-api` (HTTP na URL configurada) |
 
-`HealthChecks:JavaApiUrl` vazio = só Oracle no ready. Quando a Java subir, preencha a URL (ex.: `http://localhost:8080/actuator/health`) e o check `java-api` entra automaticamente.
+- Preencha `HealthChecks:JavaApiUrl` com o endpoint de health da API Java (ex.: `/actuator/health` ou a rota que o grupo Java expuser). Valor também no `IDENTIFICACAO_GRUPO.txt`.
+- Se a URL estiver vazia ou a Java estiver offline, o check `java-api` fica **Degraded** (ainda aparece no JSON; Oracle Healthy mantém a API utilizável).
+- Peça a URL exata à pessoa do Java e cole no `.txt` + `appsettings.Development.json` antes da correção/apresentação.
 
-## Rodar
+## Como o professor / avaliador sobe a API
 
-Pré-requisito: .NET 8 SDK + Oracle com migration/seed aplicados.
+Pré-requisitos: **.NET 8 SDK**, acesso ao **Oracle FIAP** do grupo, valores do **`IDENTIFICACAO_GRUPO.txt`**.
 
-```bash
+### 1) Colar credenciais
+Abra `IDENTIFICACAO_GRUPO.txt` e copie para `src/HidroBairro.API/appsettings.Development.json`:
+1. `OracleConnection`
+2. `Auth:Key` (secret Base64) — mantenha `KeyIsBase64: true` e `LocalIssuerEnabled: true`
+3. `HealthChecks:JavaApiUrl` (se a Java estiver acessível)
+
+### 2) Subir
+Na raiz do repositório:
+
+```powershell
 dotnet restore HidroBairro.sln
 dotnet build HidroBairro.sln
 dotnet run --project src/HidroBairro.API --launch-profile http
 ```
 
-- Base URL: `http://localhost:5080`
+- Base: `http://localhost:5080`
 - Swagger: `http://localhost:5080/swagger`
-- Smoke: `GET /` → `{ "service": "HidroBairro.API", "status": "ok" }`
-- Live: `GET /health/live`
-- Ready: `GET /health/ready` (precisa Oracle up)
+- Live: `http://localhost:5080/health/live`
+- Ready: `http://localhost:5080/health/ready`
 
-Validação rápida no Swagger:
+### 3) Autenticar no Swagger (duas opções)
 
-1. Token Java **ou** `POST /api/auth/dev-token` com `{ "email", "papel" }` → Authorize
-2. `GET /api/categorias`
-3. `POST /api/solicitacoes` com `Idempotency-Key: mobile-teste-1` + body (categoriaId + pontoId ou lat/long)
-4. `GET /api/solicitacoes`
-5. Repetir o mesmo POST/`Idempotency-Key` → mesmo recurso, sem duplicar
-6. Spam de `GET /api/categorias` (com limite baixo) → **429**
-7. `GET /health/live` e `GET /health/ready` → status Healthy
-8. Request sem token / token inválido → **401**
+**A — Token local (recomendado na correção; não depende do Java)**  
+1. `POST /api/auth/dev-token`  
+   ```json
+   { "email": "EMAIL_EXISTENTE_EM_USUARIO_HB", "papel": "CIDADAO" }
+   ```
+   (ex.: um email do seed / tabela `USUARIO_HB`)  
+2. Copiar `accessToken` → **Authorize** → colar **só** o `eyJ...` (sem a palavra Bearer)  
+3. `GET /api/categorias` → 200  
 
-```bash
+**B — Token Java**  
+1. Login na API Java → copiar o `token`  
+2. Authorize no Swagger .NET da mesma forma  
+3. Token Java costuma durar ~24h; se expirar, gere outro no Java **ou** use a opção A  
+
+### 4) Fluxo rápido para validar a nota
+
+1. Sem Authorize → `GET /api/categorias` → **401**  
+2. Com token → `GET /api/categorias` → **200**  
+3. `POST /api/solicitacoes` + header `Idempotency-Key` → **201**; repetir a mesma key → **200** (não duplica)  
+4. Spam de requests (ou `PermitLimit` baixo) → **429**  
+5. `GET /health/live` e `GET /health/ready` → checks `self` / `oracle` / `java-api`
+
+```powershell
 dotnet test HidroBairro.sln
 ```
 
@@ -258,14 +290,13 @@ dotnet test HidroBairro.sln
 | `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (Moq) |
 | `HidroBairro.IntegrationTests` | `WebApplicationFactory` + EF InMemory: health, JWT local, 401, categorias, create, idempotência, list |
 
-Os integration tests **não** dependem do Oracle nem do Java: sobem a API com JWT local (`/api/auth/dev-token`) e banco em memória.
+Os integration tests **não** dependem do Oracle nem do Java.
 
 ### Entrega (Portal)
-1. Repo no GitHub com este README  
-2. Preencher `IDENTIFICACAO_GRUPO.txt` (RM/nome de cada integrante)  
-3. `.zip` com o **link do GitHub** + o `.txt` de identificação  
+1. Repositório no GitHub com este README  
+2. `IDENTIFICACAO_GRUPO.txt` preenchido (integrantes + Oracle + JWT secret + JavaApiUrl)  
+3. `.zip` = **link do GitHub** + o **`.txt`**  
 
-Quando o Java entregar Key/Issuer/Audience/claims: espelhar em `Auth` e setar `LocalIssuerEnabled=false`.
 
 ## Etapas
 

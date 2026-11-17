@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
@@ -13,7 +14,7 @@ namespace HidroBairro.IntegrationTests;
 
 public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Program>
 {
-    /// <summary>Mesmo secret Base64 do Java (material HMAC após decode).</summary>
+    /// <summary>Secret Base64 de teste (32 bytes após decode).</summary>
     public const string TestAuthKeyBase64 = "61BMUo/4EwnkPt7Ep1hnAjjjdh8LCHJIs5OeZjBc7gQ=";
 
     private readonly string _databaseName = $"HidroBairroTests_{Guid.NewGuid():N}";
@@ -21,6 +22,22 @@ public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Pro
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+
+        // Precisa rodar ANTES do Program.cs ler Auth:Key (senão o placeholder do appsettings quebra o host).
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Auth:Enabled"] = "true",
+                ["Auth:LocalIssuerEnabled"] = "true",
+                ["Auth:Key"] = TestAuthKeyBase64,
+                ["Auth:KeyIsBase64"] = "true",
+                ["Auth:ValidateIssuer"] = "false",
+                ["Auth:ValidateAudience"] = "false",
+                ["Auth:ExpirationMinutes"] = "60",
+                ["HealthChecks:JavaApiUrl"] = ""
+            });
+        });
 
         builder.ConfigureTestServices(services =>
         {

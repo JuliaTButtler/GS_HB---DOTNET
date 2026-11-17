@@ -13,7 +13,9 @@ public static class HealthCheckExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var healthChecks = services.AddHealthChecks()
+        var javaUrl = configuration["HealthChecks:JavaApiUrl"];
+
+        services.AddHealthChecks()
             .AddCheck(
                 "self",
                 () => HealthCheckResult.Healthy("API process is up."),
@@ -21,17 +23,13 @@ public static class HealthCheckExtensions
             .AddDbContextCheck<AppDbContext>(
                 name: "oracle",
                 failureStatus: HealthStatus.Unhealthy,
-                tags: [ReadyTag]);
-
-        var javaUrl = configuration["HealthChecks:JavaApiUrl"];
-        if (!string.IsNullOrWhiteSpace(javaUrl))
-        {
-            healthChecks.AddCheck(
+                tags: [ReadyTag])
+            // Serviço externo (API Java). Sem URL → Degraded (ainda aparece no /health/ready).
+            .AddCheck(
                 "java-api",
                 new ExternalHttpHealthCheck(javaUrl),
-                failureStatus: HealthStatus.Unhealthy,
+                failureStatus: HealthStatus.Degraded,
                 tags: [ReadyTag]);
-        }
 
         return services;
     }
@@ -83,7 +81,7 @@ public static class HealthCheckExtensions
 }
 
 /// <summary>
-/// Checa um serviço HTTP externo (ex.: API Java). Só entra no ready se HealthChecks:JavaApiUrl estiver configurado.
+/// Checa a API Java (serviço externo). URL em HealthChecks:JavaApiUrl (ver IDENTIFICACAO_GRUPO.txt).
 /// </summary>
 internal sealed class ExternalHttpHealthCheck : IHealthCheck
 {
@@ -92,27 +90,33 @@ internal sealed class ExternalHttpHealthCheck : IHealthCheck
         Timeout = TimeSpan.FromSeconds(5)
     };
 
-    private readonly string _url;
+    private readonly string? _url;
 
-    public ExternalHttpHealthCheck(string url)
+    public ExternalHttpHealthCheck(string? url)
     {
-        _url = url;
+        _url = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
+        if (_url is null)
+        {
+            return HealthCheckResult.Degraded(
+                "HealthChecks:JavaApiUrl não configurada. Preencha com a URL de health da API Java (IDENTIFICACAO_GRUPO.txt).");
+        }
+
         try
         {
             using var response = await HttpClient.GetAsync(_url, cancellationToken);
             return response.IsSuccessStatusCode
                 ? HealthCheckResult.Healthy($"Reached {_url} ({(int)response.StatusCode}).")
-                : HealthCheckResult.Unhealthy($"External service returned {(int)response.StatusCode} for {_url}.");
+                : HealthCheckResult.Degraded($"API Java retornou {(int)response.StatusCode} em {_url}.");
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy($"Cannot reach {_url}.", ex);
+            return HealthCheckResult.Degraded($"Não foi possível alcançar a API Java em {_url}.", ex);
         }
     }
 }
