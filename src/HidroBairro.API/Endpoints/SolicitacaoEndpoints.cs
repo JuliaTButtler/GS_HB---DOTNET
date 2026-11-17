@@ -2,6 +2,7 @@ using HidroBairro.API.Auth;
 using HidroBairro.API.Extensions;
 using HidroBairro.Application.DTOs.Solicitacoes;
 using HidroBairro.Application.Services;
+using HidroBairro.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HidroBairro.API.Endpoints;
@@ -32,16 +33,24 @@ public static class SolicitacaoEndpoints
                 });
             }
 
-            var result = await service.CreateAsync(
-                request,
-                http.GetUsuarioId(),
-                idempotencyKey,
-                cancellationToken);
+            try
+            {
+                var usuarioId = await http.GetUsuarioIdAsync(cancellationToken);
+                var result = await service.CreateAsync(
+                    request,
+                    usuarioId,
+                    idempotencyKey,
+                    cancellationToken);
 
-            if (result.Succeeded && result.Created && result.Data is not null)
-                return result.ToHttpResult($"/api/solicitacoes/{result.Data.Id}");
+                if (result.Succeeded && result.Created && result.Data is not null)
+                    return result.ToHttpResult($"/api/solicitacoes/{result.Data.Id}");
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("CreateSolicitacao")
         .WithSummary("Abre solicitação (Idempotency-Key obrigatório)")
@@ -59,21 +68,28 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var query = new SolicitacaoListQuery
+            try
             {
-                Page = page,
-                PageSize = pageSize,
-                Status = status,
-                SomenteDoUsuario = somenteDoUsuario ?? true
-            };
+                var query = new SolicitacaoListQuery
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    Status = status,
+                    SomenteDoUsuario = somenteDoUsuario ?? true
+                };
 
-            var result = await service.ListAsync(
-                query,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                cancellationToken);
+                var result = await service.ListAsync(
+                    query,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("ListSolicitacoes")
         .WithSummary("Lista solicitações (cidadão: as dele; gestor: fila se somenteDoUsuario=false)");
@@ -84,13 +100,20 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var result = await service.GetByIdAsync(
-                id,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                cancellationToken);
+            try
+            {
+                var result = await service.GetByIdAsync(
+                    id,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("GetSolicitacao")
         .WithSummary("Busca solicitação por id")
@@ -104,13 +127,20 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var result = await service.ListHistoricoAsync(
-                id,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                cancellationToken);
+            try
+            {
+                var result = await service.ListHistoricoAsync(
+                    id,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("ListSolicitacaoHistorico")
         .WithSummary("Lista histórico de status da solicitação (ordem cronológica)")
@@ -125,14 +155,21 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var result = await service.UpdateAsync(
-                id,
-                request,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                cancellationToken);
+            try
+            {
+                var result = await service.UpdateAsync(
+                    id,
+                    request,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("UpdateSolicitacao")
         .WithSummary("Edita título/descrição (só RECEBIDA)")
@@ -148,14 +185,21 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var result = await service.CancelAsync(
-                id,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                observacao,
-                cancellationToken);
+            try
+            {
+                var result = await service.CancelAsync(
+                    id,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    observacao,
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("CancelSolicitacao")
         .WithSummary("Cancela solicitação")
@@ -171,14 +215,21 @@ public static class SolicitacaoEndpoints
             ISolicitacaoService service,
             CancellationToken cancellationToken) =>
         {
-            var result = await service.ChangeStatusAsync(
-                id,
-                request,
-                http.GetUsuarioId(),
-                http.GetPapel(),
-                cancellationToken);
+            try
+            {
+                var result = await service.ChangeStatusAsync(
+                    id,
+                    request,
+                    await http.GetUsuarioIdAsync(cancellationToken),
+                    http.GetPapel(),
+                    cancellationToken);
 
-            return result.ToHttpResult();
+                return result.ToHttpResult();
+            }
+            catch (UnauthorizedException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
         })
         .WithName("ChangeSolicitacaoStatus")
         .WithSummary("Altera status (gestor: fluxo operacional; cidadão: cancelar a própria)")

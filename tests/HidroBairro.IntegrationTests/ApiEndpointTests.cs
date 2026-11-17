@@ -20,7 +20,7 @@ public class ApiEndpointTests : IClassFixture<HidroBairroWebApplicationFactory>
         await _factory.EnsureSeedAsync();
         var client = _factory.CreateClient();
 
-        var token = await AuthTestHelper.IssueTokenAsync(client, usuarioId: 1, papel: "CIDADAO");
+        var token = await AuthTestHelper.IssueTokenAsync(client, email: "carla.souza@email.com", papel: "CIDADAO");
 
         Assert.StartsWith("eyJ", token);
         Assert.Equal(2, token.Count(c => c == '.'));

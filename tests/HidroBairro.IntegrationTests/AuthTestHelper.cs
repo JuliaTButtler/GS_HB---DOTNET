@@ -6,19 +6,14 @@ namespace HidroBairro.IntegrationTests;
 
 internal static class AuthTestHelper
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     public static async Task<string> IssueTokenAsync(
         HttpClient client,
-        long usuarioId = 1,
+        string email = "carla.souza@email.com",
         string papel = "CIDADAO")
     {
         var response = await client.PostAsJsonAsync("/api/auth/dev-token", new
         {
-            usuarioId,
+            email,
             papel
         });
 
@@ -32,11 +27,11 @@ internal static class AuthTestHelper
 
     public static async Task<HttpClient> CreateAuthenticatedClientAsync(
         HidroBairroWebApplicationFactory factory,
-        long usuarioId = 1,
+        string email = "carla.souza@email.com",
         string papel = "CIDADAO")
     {
         var client = factory.CreateClient();
-        var token = await IssueTokenAsync(client, usuarioId, papel);
+        var token = await IssueTokenAsync(client, email, papel);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }

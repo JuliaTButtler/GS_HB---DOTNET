@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using HidroBairro.API.Auth;
 using HidroBairro.API.Extensions;
 using HidroBairro.Domain.Models;
@@ -26,9 +25,9 @@ public static class AuthEndpoints
             [FromBody] DevTokenRequest request,
             IOptions<AuthOptions> options) =>
         {
-            if (request.UsuarioId <= 0)
+            if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
             {
-                return Results.BadRequest(new { error = "UsuarioId deve ser > 0." });
+                return Results.BadRequest(new { error = "Email válido é obrigatório (vai na claim sub, como no Java)." });
             }
 
             var papel = (request.Papel ?? string.Empty).Trim().ToUpperInvariant();
@@ -44,20 +43,19 @@ public static class AuthEndpoints
             }
 
             var cfg = options.Value;
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(cfg.Key));
+            var key = JwtKeyHelper.CreateSigningKey(cfg);
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var expires = DateTime.UtcNow.AddMinutes(cfg.ExpirationMinutes);
+            var email = request.Email.Trim();
 
-            // Uma única claim "sub" (string). Duplicar vira array no JWT e o Bearer rejeita como invalid_token.
+            // Alinhado ao Java: sub=email, role=CIDADAO|GESTOR, sem iss/aud.
             var claims = new List<Claim>
             {
-                new(JwtRegisteredClaimNames.Sub, request.UsuarioId.ToString()),
+                new(JwtRegisteredClaimNames.Sub, email),
                 new(AuthExtensions.RoleClaimType, papel)
             };
 
             var token = new JwtSecurityToken(
-                issuer: cfg.Issuer,
-                audience: cfg.Audience,
                 claims: claims,
                 notBefore: DateTime.UtcNow,
                 expires: expires,
@@ -70,13 +68,13 @@ public static class AuthEndpoints
                 accessToken = jwt,
                 tokenType = "Bearer",
                 expiresAtUtc = expires,
-                usuarioId = request.UsuarioId,
+                email,
                 papel,
-                note = "Token local de desenvolvimento. Troque LocalIssuerEnabled=false quando o Java emitir o JWT oficial."
+                note = "Token local no mesmo formato do Java (sub=email, role). Prefira o token do login Java em integração real."
             });
         })
         .WithName("IssueDevToken")
-        .WithSummary("Emite JWT local (Dev) até a API Java ser o issuer")
+        .WithSummary("Emite JWT local no formato Java (sub=email, role)")
         .Produces(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status400BadRequest);
 

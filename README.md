@@ -121,42 +121,53 @@ Contrato para Mobile (fetch/axios).
 | PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |
 | POST | `/api/auth/dev-token` | Emite JWT **local** (só se `Auth:LocalIssuerEnabled=true`) |
 
-## JWT (etapa 7)
+## JWT (etapa 7) — alinhado ao Java
 
-O .NET **valida** o mesmo JWT que o Java vai emitir (`Key` / `Issuer` / `Audience` iguais).  
-Enquanto o Java não sobe, o Development emite token local.
+O .NET **valida** o JWT emitido no login Java (não faz login).
+
+### Contrato atual (Java)
+
+| Item | Valor |
+|---|---|
+| Algoritmo | HS256 |
+| Secret | Base64 (`Auth:Key` + `KeyIsBase64=true`) |
+| `sub` | **email** do usuário (`USUARIO_HB.EMAIL`) |
+| `role` | `CIDADAO` ou `GESTOR` |
+| `iss` / `aud` | não usados (`ValidateIssuer/Audience=false`) |
+| Validade | tipicamente ~24h (`exp` no token) |
+
+O .NET resolve `sub` (email) → `USUARIO_HB.ID` para gravar FK nas solicitações.
 
 ### Config (`Auth`)
 
-| Chave | Dev atual | Depois (Java pronto) |
+| Chave | Produção / Java | Development |
 |---|---|---|
 | `Enabled` | `true` | `true` |
-| `LocalIssuerEnabled` | `true` | `false` |
-| `Key` | secret compartilhado (≥32 chars) | **mesmo** secret do Java |
-| `Issuer` | `hidrobairro-java` | igual ao Java |
-| `Audience` | `hidrobairro-apis` | igual ao Java |
+| `LocalIssuerEnabled` | `false` | `true` (fallback `POST /api/auth/dev-token`) |
+| `Key` | secret Base64 do Java | **mesmo** |
+| `KeyIsBase64` | `true` | `true` |
+| `ValidateIssuer` | `false` | `false` |
+| `ValidateAudience` | `false` | `false` |
 
-Claims esperadas: `sub` = id do usuário (`USUARIO_HB.ID`), `role` = `CIDADAO` ou `GESTOR`  
-(aceita também `ROLE_CIDADAO` / claim `papel`).
+Policies: `CIDADAO`, `GESTOR`, `CidadaoOuGestor`. Sem token / inválido / email inexistente → **401**.
 
-Policies: `CIDADAO`, `GESTOR`, `CidadaoOuGestor` (endpoints de zeladoria usam esta última).  
-Sem token / token inválido → **401**. `Auth:Enabled=false` volta aos headers `X-User-Id` / `X-User-Role`.
+### Testar com token do Java
 
-### Testar no Swagger (JWT local, sem Java)
+1. Login na API Java → copie o `token`
+2. Swagger .NET → **Authorize** → cole só o `eyJ...` (sem `Bearer `)
+3. `GET /api/categorias` → **200** se o email do `sub` existir em `USUARIO_HB`
+4. Token expirado / secret errado / sem role → **401**
 
-1. `dotnet run --project src/HidroBairro.API --launch-profile http`
-2. `POST /api/auth/dev-token` body:
-   ```json
-   { "usuarioId": 1, "papel": "CIDADAO" }
-   ```
-3. Copie `accessToken` → Swagger **Authorize** → `Bearer <token>`
-4. Chame `GET /api/categorias` / CRUD de solicitações
-5. Token lixo ou sem Authorize → **401**
+### Testar com JWT local (Dev)
 
-| Cenário | usuarioId | papel |
+```json
+{ "email": "carla.souza@email.com", "papel": "CIDADAO" }
+```
+
+| Cenário | email | papel |
 |---|---|---|
-| Cidadão | `1` (Carla Souza) | `CIDADAO` |
-| Gestor | `12` (Bruno Teixeira) | `GESTOR` |
+| Cidadão | email de um `CIDADAO` no seed | `CIDADAO` |
+| Gestor | email de um `GESTOR` no seed | `GESTOR` |
 
 Usuários do seed atual (`USUARIO_HB` — domínio Java; .NET só usa o id na FK):
 
@@ -227,7 +238,7 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 
 Validação rápida no Swagger:
 
-1. `POST /api/auth/dev-token` → Authorize com Bearer
+1. Token Java **ou** `POST /api/auth/dev-token` com `{ "email", "papel" }` → Authorize
 2. `GET /api/categorias`
 3. `POST /api/solicitacoes` com `Idempotency-Key: mobile-teste-1` + body (categoriaId + pontoId ou lat/long)
 4. `GET /api/solicitacoes`
@@ -240,6 +251,22 @@ Validação rápida no Swagger:
 dotnet test HidroBairro.sln
 ```
 
+## Testes + entrega (etapa 8)
+
+| Projeto | O que cobre |
+|---|---|
+| `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (Moq) |
+| `HidroBairro.IntegrationTests` | `WebApplicationFactory` + EF InMemory: health, JWT local, 401, categorias, create, idempotência, list |
+
+Os integration tests **não** dependem do Oracle nem do Java: sobem a API com JWT local (`/api/auth/dev-token`) e banco em memória.
+
+### Entrega (Portal)
+1. Repo no GitHub com este README  
+2. Preencher `IDENTIFICACAO_GRUPO.txt` (RM/nome de cada integrante)  
+3. `.zip` com o **link do GitHub** + o `.txt` de identificação  
+
+Quando o Java entregar Key/Issuer/Audience/claims: espelhar em `Auth` e setar `LocalIssuerEnabled=false`.
+
 ## Etapas
 
 1. ~~Scaffold Clean Architecture~~ ✅  
@@ -249,4 +276,4 @@ dotnet test HidroBairro.sln
 5. ~~Endpoints Minimal API + Swagger~~ ✅  
 6. ~~Rate limiting + Health Checks~~ ✅  
 7. ~~JWT (validação + issuer local Dev)~~ ✅  
-8. Testes de negócio + README final / entrega  
+8. ~~Testes + README + IDENTIFICACAO_GRUPO.txt~~ ✅  

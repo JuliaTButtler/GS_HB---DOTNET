@@ -2,6 +2,8 @@ namespace HidroBairro.API.Auth;
 
 public sealed class DevTokenRequest
 {
-    public long UsuarioId { get; init; }
+    /// <summary>Email do usuário (mesmo formato do Java: claim sub).</summary>
+    public string Email { get; init; } = string.Empty;
+
     public string Papel { get; init; } = "CIDADAO";
 }

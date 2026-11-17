@@ -1,4 +1,3 @@
-using System.Text;
 using HidroBairro.API.Auth;
 using HidroBairro.Domain.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -21,11 +20,7 @@ public static class AuthExtensions
         if (!auth.Enabled)
             return services;
 
-        if (string.IsNullOrWhiteSpace(auth.Key) || auth.Key.Length < 32)
-            throw new InvalidOperationException(
-                "Auth:Key deve ter pelo menos 32 caracteres quando Auth:Enabled=true.");
-
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(auth.Key));
+        var signingKey = JwtKeyHelper.CreateSigningKey(auth);
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -34,14 +29,14 @@ public static class AuthExtensions
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = true,
-                    ValidIssuer = auth.Issuer,
-                    ValidateAudience = true,
-                    ValidAudience = auth.Audience,
+                    ValidateIssuer = auth.ValidateIssuer,
+                    ValidIssuer = auth.ValidateIssuer ? auth.Issuer : null,
+                    ValidateAudience = auth.ValidateAudience,
+                    ValidAudience = auth.ValidateAudience ? auth.Audience : null,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = signingKey,
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.FromMinutes(1),
+                    ClockSkew = TimeSpan.FromMinutes(2),
                     RoleClaimType = RoleClaimType,
                     NameClaimType = SubClaimType
                 };

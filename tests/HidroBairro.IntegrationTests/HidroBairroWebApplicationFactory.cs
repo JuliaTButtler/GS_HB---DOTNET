@@ -1,4 +1,3 @@
-using System.Text;
 using HidroBairro.API.Auth;
 using HidroBairro.Domain.Models;
 using HidroBairro.Infrastructure.Persistence;
@@ -14,9 +13,8 @@ namespace HidroBairro.IntegrationTests;
 
 public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Program>
 {
-    public const string TestAuthKey = "HidroBairro_Test_Secret_Key_AtLeast_32_Chars!";
-    public const string TestIssuer = "hidrobairro-java";
-    public const string TestAudience = "hidrobairro-apis";
+    /// <summary>Mesmo secret Base64 do Java (material HMAC após decode).</summary>
+    public const string TestAuthKeyBase64 = "61BMUo/4EwnkPt7Ep1hnAjjjdh8LCHJIs5OeZjBc7gQ=";
 
     private readonly string _databaseName = $"HidroBairroTests_{Guid.NewGuid():N}";
 
@@ -45,26 +43,30 @@ public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Pro
             {
                 auth.Enabled = true;
                 auth.LocalIssuerEnabled = true;
-                auth.Key = TestAuthKey;
-                auth.Issuer = TestIssuer;
-                auth.Audience = TestAudience;
+                auth.Key = TestAuthKeyBase64;
+                auth.KeyIsBase64 = true;
+                auth.ValidateIssuer = false;
+                auth.ValidateAudience = false;
                 auth.ExpirationMinutes = 60;
             });
 
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestAuthKey));
+                var key = JwtKeyHelper.CreateSigningKey(new AuthOptions
+                {
+                    Key = TestAuthKeyBase64,
+                    KeyIsBase64 = true
+                });
+
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = true,
-                    ValidIssuer = TestIssuer,
-                    ValidateAudience = true,
-                    ValidAudience = TestAudience,
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = key,
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.FromMinutes(1),
+                    ClockSkew = TimeSpan.FromMinutes(2),
                     RoleClaimType = "role",
                     NameClaimType = "sub"
                 };
