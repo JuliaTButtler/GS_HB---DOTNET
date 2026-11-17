@@ -1,3 +1,4 @@
+using HidroBairro.API.Auth;
 using HidroBairro.API.Extensions;
 using HidroBairro.Application.DTOs.Solicitacoes;
 using HidroBairro.Application.Services;
@@ -10,7 +11,11 @@ public static class SolicitacaoEndpoints
     public static RouteGroupBuilder MapSolicitacaoEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/solicitacoes")
-            .WithTags("Solicitacoes");
+            .WithTags("Solicitacoes")
+            .RequireRateLimiting(RateLimitingExtensions.ApiPolicyName);
+
+        if (app.IsAuthEnabled())
+            group.RequireAuthorization(AuthPolicies.CidadaoOuGestor);
 
         group.MapPost("/", async (
             CreateSolicitacaoRequest request,

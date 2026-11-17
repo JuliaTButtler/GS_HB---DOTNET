@@ -20,4 +20,15 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("HidroBairro.API", body);
     }
+
+    [Fact]
+    public async Task HealthLive_ReturnsHealthy()
+    {
+        var response = await _client.GetAsync("/health/live");
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Healthy", body);
+        Assert.Contains("self", body);
+    }
 }

@@ -107,7 +107,7 @@ Pré-requisito: tabelas Java (`USUARIO_HB`, `PONTO_MONITORAMENTO_HB`, …) já c
 
 ## API HTTP + Swagger (etapa 5)
 
-Contrato para Mobile (fetch/axios) — **sem JWT nesta etapa**.
+Contrato para Mobile (fetch/axios).
 
 | Método | Rota | Notas |
 |---|---|---|
@@ -119,23 +119,41 @@ Contrato para Mobile (fetch/axios) — **sem JWT nesta etapa**.
 | PUT | `/api/solicitacoes/{id}` | Edita título/descrição se `RECEBIDA` |
 | POST | `/api/solicitacoes/{id}/cancelar` | Query opcional `observacao` |
 | PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |
+| POST | `/api/auth/dev-token` | Emite JWT **local** (só se `Auth:LocalIssuerEnabled=true`) |
 
-### Testar no Swagger (sem Java)
+## JWT (etapa 7)
+
+O .NET **valida** o mesmo JWT que o Java vai emitir (`Key` / `Issuer` / `Audience` iguais).  
+Enquanto o Java não sobe, o Development emite token local.
+
+### Config (`Auth`)
+
+| Chave | Dev atual | Depois (Java pronto) |
+|---|---|---|
+| `Enabled` | `true` | `true` |
+| `LocalIssuerEnabled` | `true` | `false` |
+| `Key` | secret compartilhado (≥32 chars) | **mesmo** secret do Java |
+| `Issuer` | `hidrobairro-java` | igual ao Java |
+| `Audience` | `hidrobairro-apis` | igual ao Java |
+
+Claims esperadas: `sub` = id do usuário (`USUARIO_HB.ID`), `role` = `CIDADAO` ou `GESTOR`  
+(aceita também `ROLE_CIDADAO` / claim `papel`).
+
+Policies: `CIDADAO`, `GESTOR`, `CidadaoOuGestor` (endpoints de zeladoria usam esta última).  
+Sem token / token inválido → **401**. `Auth:Enabled=false` volta aos headers `X-User-Id` / `X-User-Role`.
+
+### Testar no Swagger (JWT local, sem Java)
 
 1. `dotnet run --project src/HidroBairro.API --launch-profile http`
-2. Abra `http://localhost:5080/swagger` → **Authorize**
+2. `POST /api/auth/dev-token` body:
+   ```json
+   { "usuarioId": 1, "papel": "CIDADAO" }
+   ```
+3. Copie `accessToken` → Swagger **Authorize** → `Bearer <token>`
+4. Chame `GET /api/categorias` / CRUD de solicitações
+5. Token lixo ou sem Authorize → **401**
 
-| No Swagger | Header | O que é | Default |
-|---|---|---|---|
-| **DevUser** | `X-User-Id` | Id em `USUARIO_HB` | `1` |
-| **DevRole** | `X-User-Role` | `CIDADAO` ou `GESTOR` | `CIDADAO` |
-
-Use um **DevUser** que exista no seed e um **DevRole** coerente com o `PAPEL` da linha.  
-Cidadão só vê as **próprias** solicitações; gestor vê qualquer uma (`PATCH …/status` operacional).
-
-Sugestão rápida:
-
-| Cenário | DevUser | DevRole |
+| Cenário | usuarioId | papel |
 |---|---|---|
 | Cidadão | `1` (Carla Souza) | `CIDADAO` |
 | Gestor | `12` (Bruno Teixeira) | `GESTOR` |
@@ -168,7 +186,28 @@ FROM USUARIO_HB
 ORDER BY ID;
 ```
 
-Status de erro: **400** regra, **403** forbidden, **404** not found, **409** conflict.
+Status de erro: **400** regra, **403** forbidden, **404** not found, **409** conflict, **429** rate limit.
+
+## Rate limiting + Health (etapa 6)
+
+### Rate limiting
+- Política `api` (fixed window) aplicada em `/api/categorias` e `/api/solicitacoes`
+- Partição por IP (fallback: `X-User-Id`)
+- Config em `RateLimiting` (`PermitLimit`, `WindowSeconds`, `QueueLimit`)
+- Excesso → **HTTP 429** + JSON `{ error, message, status }` e header `Retry-After` quando disponível
+- `/`, `/health/*` e Swagger **não** entram na política `api`
+
+Defaults: **60 req / 60s** (produção); **120 / 60s** em Development.
+
+Para forçar 429 no teste: baixe `PermitLimit` para `5` em `appsettings.Development.json` e spamme `GET /api/categorias`.
+
+### Health checks
+| Rota | O que checa | Tags |
+|---|---|---|
+| `GET /health/live` | processo da API (`self`) | live |
+| `GET /health/ready` | Oracle (`AddDbContextCheck`) + opcional API Java | ready |
+
+`HealthChecks:JavaApiUrl` vazio = só Oracle no ready. Quando a Java subir, preencha a URL (ex.: `http://localhost:8080/actuator/health`) e o check `java-api` entra automaticamente.
 
 ## Rodar
 
@@ -183,13 +222,19 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 - Base URL: `http://localhost:5080`
 - Swagger: `http://localhost:5080/swagger`
 - Smoke: `GET /` → `{ "service": "HidroBairro.API", "status": "ok" }`
+- Live: `GET /health/live`
+- Ready: `GET /health/ready` (precisa Oracle up)
 
 Validação rápida no Swagger:
 
-1. `GET /api/categorias`
-2. `POST /api/solicitacoes` com `Idempotency-Key: mobile-teste-1` + body (categoriaId + pontoId ou lat/long)
-3. `GET /api/solicitacoes`
-4. Repetir o mesmo POST/`Idempotency-Key` → mesmo recurso, sem duplicar
+1. `POST /api/auth/dev-token` → Authorize com Bearer
+2. `GET /api/categorias`
+3. `POST /api/solicitacoes` com `Idempotency-Key: mobile-teste-1` + body (categoriaId + pontoId ou lat/long)
+4. `GET /api/solicitacoes`
+5. Repetir o mesmo POST/`Idempotency-Key` → mesmo recurso, sem duplicar
+6. Spam de `GET /api/categorias` (com limite baixo) → **429**
+7. `GET /health/live` e `GET /health/ready` → status Healthy
+8. Request sem token / token inválido → **401**
 
 ```bash
 dotnet test HidroBairro.sln
@@ -202,6 +247,6 @@ dotnet test HidroBairro.sln
 3. ~~DbContext + configs Oracle (migration: você aplica)~~ ✅  
 4. ~~Application (repos, UoW, services, idempotência, testes)~~ ✅  
 5. ~~Endpoints Minimal API + Swagger~~ ✅  
-6. Rate limiting + Health Checks  
-7. JWT alinhado ao Java  
+6. ~~Rate limiting + Health Checks~~ ✅  
+7. ~~JWT (validação + issuer local Dev)~~ ✅  
 8. Testes de negócio + README final / entrega  

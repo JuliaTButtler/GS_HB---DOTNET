@@ -1,3 +1,4 @@
+using HidroBairro.API.Auth;
 using HidroBairro.API.Extensions;
 using HidroBairro.Application.Services;
 
@@ -8,7 +9,11 @@ public static class CategoriaEndpoints
     public static RouteGroupBuilder MapCategoriaEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/categorias")
-            .WithTags("Categorias");
+            .WithTags("Categorias")
+            .RequireRateLimiting(RateLimitingExtensions.ApiPolicyName);
+
+        if (app.IsAuthEnabled())
+            group.RequireAuthorization(AuthPolicies.CidadaoOuGestor);
 
         group.MapGet("/", async (
             ICategoriaService service,
