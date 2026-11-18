@@ -169,7 +169,7 @@ Os `appsettings*.json` no GitHub usam **placeholders** (sem senha real).
 | `Auth:Key` | JWT secret Base64 (mesmo do Java) |
 | `Auth:KeyIsBase64` | `true` |
 | `Auth:LocalIssuerEnabled` | `true` (permite `dev-token` na correção) |
-| `HealthChecks:JavaApiUrl` | URL de health da API Java |
+| `HealthChecks:JavaApiUrl` | URL de health da API Java (https://hidrobairro-java-gs2.onrender.com/actuator/health)| 
 
 Exemplo:
 
