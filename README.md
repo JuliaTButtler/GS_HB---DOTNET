@@ -212,7 +212,7 @@ dotnet ef database update `
 
 Se o schema **já** tem as tabelas Java (caso usual do grupo na FIAP), pule o passo 1 e use só migration (se faltar) + seed conforme necessário.
 
-### Rodar a API
+### Rodar a API (local)
 
 ```powershell
 dotnet restore HidroBairro.sln
@@ -227,6 +227,39 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 | OpenAPI JSON | `http://localhost:5080/swagger/v1/swagger.json` |
 | Health live | `http://localhost:5080/health/live` |
 | Health ready | `http://localhost:5080/health/ready` |
+
+### Deploy no Render (Docker — sem instalar Docker no PC)
+
+O `Dockerfile` fica na **raiz do repositório**. O Render clona o GitHub e builda na **nuvem**.
+
+1. Faça push deste repo para o GitHub (`GS_HB---DOTNET`).
+2. Acesse [https://dashboard.render.com](https://dashboard.render.com) (conta com login GitHub).
+3. **New → Web Service** → selecione o repositório.
+4. Configuração:
+   - **Runtime:** Docker
+   - **Dockerfile Path:** `./Dockerfile` (raiz)
+   - **Branch:** `main` (ou a branch que você usa)
+5. **Environment Variables** (Environment):
+
+| Key | Exemplo / valor |
+|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Development` (libera Swagger + `dev-token`) |
+| `ConnectionStrings__OracleConnection` | connection string do Oracle FIAP |
+| `Auth__Key` | JWT secret Base64 (mesmo do Java) |
+| `Auth__KeyIsBase64` | `true` |
+| `Auth__Enabled` | `true` |
+| `Auth__LocalIssuerEnabled` | `true` |
+| `Auth__ValidateIssuer` | `false` |
+| `Auth__ValidateAudience` | `false` |
+| `HealthChecks__JavaApiUrl` | (vazio por enquanto; preencher depois) |
+
+6. **Create Web Service** → aguarde o deploy.
+7. URL pública: `https://<nome-do-servico>.onrender.com`  
+   - Swagger: `https://<nome>/swagger`  
+   - Health: `https://<nome>/health/live`  
+   - Essa URL base é a que você manda para o Mobile.
+
+**Obs.:** plano Free “dorme” com idle; a 1ª request pode demorar. Oracle FIAP precisa aceitar conexão da internet do Render (se `/health/ready` falhar no `oracle`, é rede/firewall).
 
 ---
 

@@ -5,6 +5,13 @@ using HidroBairro.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render (e outros PaaS) definem PORT; local continua 5080 via launchSettings.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHidroBairroAuth(builder.Configuration);
@@ -14,6 +21,7 @@ builder.Services.AddHidroBairroHealthChecks(builder.Configuration);
 
 var app = builder.Build();
 
+// Development local OU Render com ASPNETCORE_ENVIRONMENT=Development (Swagger + demos).
 if (app.Environment.IsDevelopment())
 {
     app.UseHidroBairroSwagger();

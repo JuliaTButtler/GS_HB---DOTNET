@@ -1,0 +1,13 @@
+**/.git
+**/.vs
+**/bin
+**/obj
+**/TestResults
+**/logs
+**/*.user
+**/.idea
+**/node_modules
+README.md
+IDENTIFICACAO_GRUPO.txt
+scripts/
+agent-transcripts/
