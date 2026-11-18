@@ -29,4 +29,15 @@ public class SmokeTests : IClassFixture<HidroBairroWebApplicationFactory>
         Assert.Contains("Healthy", body);
         Assert.Contains("self", body);
     }
+
+    [Fact]
+    public async Task HealthReady_RetornaChecksOracleEJava()
+    {
+        var response = await _client.GetAsync("/health/ready");
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("oracle", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("java-api", body, StringComparison.OrdinalIgnoreCase);
+    }
 }

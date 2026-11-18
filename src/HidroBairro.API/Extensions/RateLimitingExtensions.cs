@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace HidroBairro.API.Extensions;
 
@@ -11,10 +12,7 @@ public static class RateLimitingExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var section = configuration.GetSection("RateLimiting");
-        var permitLimit = section.GetValue("PermitLimit", 60);
-        var windowSeconds = section.GetValue("WindowSeconds", 60);
-        var queueLimit = section.GetValue("QueueLimit", 0);
+        services.Configure<RateLimitingOptions>(configuration.GetSection(RateLimitingOptions.SectionName));
 
         services.AddRateLimiter(options =>
         {
@@ -43,6 +41,10 @@ public static class RateLimitingExtensions
 
             options.AddPolicy(ApiPolicyName, httpContext =>
             {
+                var opts = httpContext.RequestServices
+                    .GetRequiredService<IOptions<RateLimitingOptions>>()
+                    .Value;
+
                 var partitionKey =
                     httpContext.Connection.RemoteIpAddress?.ToString()
                     ?? httpContext.Request.Headers[DevUserExtensions.UserIdHeader].FirstOrDefault()
@@ -52,9 +54,9 @@ public static class RateLimitingExtensions
                     partitionKey,
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = permitLimit,
-                        Window = TimeSpan.FromSeconds(windowSeconds),
-                        QueueLimit = queueLimit,
+                        PermitLimit = Math.Max(1, opts.PermitLimit),
+                        Window = TimeSpan.FromSeconds(Math.Max(1, opts.WindowSeconds)),
+                        QueueLimit = Math.Max(0, opts.QueueLimit),
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         AutoReplenishment = true
                     });

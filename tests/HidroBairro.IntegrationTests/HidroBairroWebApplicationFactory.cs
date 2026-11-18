@@ -97,25 +97,9 @@ public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Pro
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
 
-        if (!await db.Usuarios.AnyAsync())
-        {
-            db.Usuarios.Add(new UsuarioRef
-            {
-                Id = 1,
-                Nome = "Carla Souza",
-                Email = "carla.souza@email.com",
-                Papel = PapelUsuario.Cidadao,
-                Ativo = AtivoFlags.Sim
-            });
-            db.Usuarios.Add(new UsuarioRef
-            {
-                Id = 12,
-                Nome = "Bruno Teixeira",
-                Email = "bruno.teixeira@email.com",
-                Papel = PapelUsuario.Gestor,
-                Ativo = AtivoFlags.Sim
-            });
-        }
+        await EnsureUsuarioAsync(db, 1, "Carla Souza", "carla.souza@email.com", PapelUsuario.Cidadao);
+        await EnsureUsuarioAsync(db, 2, "João Silva", "joao.silva@email.com", PapelUsuario.Cidadao);
+        await EnsureUsuarioAsync(db, 12, "Bruno Teixeira", "bruno.teixeira@email.com", PapelUsuario.Gestor);
 
         if (!await db.Categorias.AnyAsync())
         {
@@ -134,5 +118,25 @@ public sealed class HidroBairroWebApplicationFactory : WebApplicationFactory<Pro
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsureUsuarioAsync(
+        AppDbContext db,
+        long id,
+        string nome,
+        string email,
+        string papel)
+    {
+        if (await db.Usuarios.AnyAsync(u => u.Id == id || u.Email == email))
+            return;
+
+        db.Usuarios.Add(new UsuarioRef
+        {
+            Id = id,
+            Nome = nome,
+            Email = email,
+            Papel = papel,
+            Ativo = AtivoFlags.Sim
+        });
     }
 }

@@ -476,8 +476,8 @@ Repita o mesmo POST com a **mesma** `Idempotency-Key` → **200**, mesmo `id`.
 
 | Projeto | Cobertura |
 |---|---|
-| `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (Moq); padrão AAA |
-| `HidroBairro.IntegrationTests` | `WebApplicationFactory` + EF InMemory: JWT local, 401, categorias, create, idempotência, list, health |
+| `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (create/update/cancel/status/403) |
+| `HidroBairro.IntegrationTests` | JWT, 401/403, CRUD solicitação, idempotência, rate limit **429**, health live/ready |
 
 ```powershell
 dotnet test HidroBairro.sln
