@@ -1,248 +1,218 @@
 # HidroBairro Sul — API .NET (Zeladoria)
 
-API de **solicitações de zeladoria** do produto HidroBairro Sul (CitizenTech · GS 2026/2 · FIAP).
+API RESTful em ASP.NET Core (.NET 8) Minimal APIs para **solicitações de zeladoria** do cidadão — abrir, acompanhar e atualizar chamados (bueiro, boca de lobo, rua alagada) na Zona Sul de São Paulo, no produto **HidroBairro Sul** (CitizenTech · Global Solution 2026/2 · FIAP).
 
-Domínio desta API: abrir/acompanhar chamados (bueiro, boca de lobo, rua alagada, etc.).  
-Auth/JWT é emitido pela API Java; risco/alertas/IA ficam no Java. Este backend **valida** o JWT e opera o CRUD de solicitações no Oracle compartilhado.
+Repositório: https://github.com/JuliaTButtler/GS_HB---DOTNET.git
 
-## Stack
+## Integrantes
 
-| Item | Escolha |
+| Nome | RM | Turma |
+|---|---|---|
+| Arthur dos Santos Cabral | 566515 | 2TDSA |
+| Bruno Martins Bettio | 564939 | 2TDSA |
+| José Diogo da Silva Neves | 562341 | 2TDSA |
+| Júlia Tiziotto Buttler | 564975 | 2TDSA |
+| Mariana Xavier Quispe | 566357 | 2TDSA |
+
+> Credenciais de execução (Oracle, JWT secret, JavaApiUrl): arquivo **`IDENTIFICACAO_GRUPO.txt`** (entregue no `.zip` do Portal).
+
+## Sumário
+
+1. [Visão geral](#1-visão-geral)
+2. [Arquitetura](#2-arquitetura)
+3. [Instalação e execução](#3-instalação-e-execução)
+4. [Autenticação JWT](#4-autenticação-jwt)
+5. [Idempotência e Rate Limiting](#5-idempotência-e-rate-limiting)
+6. [Documentação dos endpoints](#6-documentação-dos-endpoints)
+7. [Guia de testes no Swagger](#7-guia-de-testes-no-swagger)
+8. [Testes automatizados](#8-testes-automatizados)
+9. [Observabilidade (Health Checks)](#9-observabilidade-health-checks)
+10. [Entrega](#10-entrega)
+
+---
+
+## 1. Visão geral
+
+### Contexto e problema
+
+A Zona Sul de São Paulo concentra ocorrências relevantes de alagamento. O cidadão precisa de um canal simples para **registrar problemas de zeladoria** (bueiro entupido, boca de lobo, rua intransitável) e acompanhar o status, sem depender só de WhatsApp ou canais genéricos.
+
+No HidroBairro Sul, risco/alertas/IA ficam na **API Java**; o **.NET** responde pela jornada “quero que alguém resolva isso” e “em que pé está meu chamado?”.
+
+### Solução proposta
+
+Backend .NET de **zeladoria** consumido pelo app Mobile (React Native):
+
+- categorias de chamado;
+- abertura de solicitação com **idempotência** (não duplica se o usuário apertar enviar duas vezes);
+- listagem, detalhe, histórico de status, edição, cancelamento e mudança de status (gestor);
+- **JWT** emitido pelo Java e **validado** nesta API (mesmo secret Base64);
+- **rate limiting**, **Health Checks** (self + Oracle + API Java) e testes xUnit.
+
+### O que a API permite
+
+| Capacidade | Detalhe |
 |---|---|
-| Runtime | .NET 8 (`net8.0`) + `global.json` |
-| Host | ASP.NET Core **Minimal APIs** |
-| ORM | EF Core 8 + Oracle.EntityFrameworkCore |
-| Auth | JWT Bearer (validação; issuer = Java) |
-| Testes | xUnit + WebApplicationFactory |
+| Categorias | Listar categorias ativas de zeladoria |
+| Solicitações | CRUD operacional (criar, listar, buscar, editar, cancelar) |
+| Status | `RECEBIDA` → `EM_VISTORIA` → `CONCLUIDA` (ou `CANCELADA`) |
+| Histórico | Trilha de mudanças de status |
+| Papéis | `CIDADAO` (próprios chamados) e `GESTOR` (fila / status operacional) |
+| Idempotência | Header `Idempotency-Key` no POST |
+| Auth | JWT Bearer (Java) + `dev-token` local em Development |
+| Proteção | Rate limit → HTTP 429 |
+| Saúde | `/health/live` e `/health/ready` |
 
-## Solution
+### Escopo técnico da entrega
 
-```
-HidroBairro.sln
-├── src/
-│   ├── HidroBairro.Domain
-│   ├── HidroBairro.Application
-│   ├── HidroBairro.Infrastructure
-│   └── HidroBairro.API
-└── tests/
-    ├── HidroBairro.UnitTests
-    └── HidroBairro.IntegrationTests
-```
+| Área | O que foi entregue |
+|---|---|
+| Arquitetura | Clean Architecture (Domain / Application / Infrastructure / API) |
+| API REST | Minimal APIs, validações, códigos HTTP, Swagger/OpenAPI |
+| Auth | JWT Bearer (valida token Java; policies CIDADAO/GESTOR) |
+| Persistência | EF Core 8 + Oracle; migrations só das 3 tabelas .NET |
+| Idempotência | `Idempotency-Key` + índice único |
+| Rate limiting | ASP.NET Core RateLimiter → 429 |
+| Observabilidade | Health Checks: self, oracle, java-api |
+| Testes | xUnit unitários (rules + services) + integração (WebApplicationFactory) |
+| Documentação | Este README + Swagger + `IDENTIFICACAO_GRUPO.txt` |
 
-Dependências: `API → Application/Infrastructure` · `Infrastructure → Application → Domain`.
+### Fora do escopo desta API (.NET)
 
-## Domain (etapa 2)
+Login/cadastro, alertas, mapa de risco, IA/RAG e ingestão IoT → **API Java**.  
+App mobile → disciplina de Mobile (consome Java + .NET).
 
-| Entidade | Tabela Oracle | Dono |
+### Tecnologias
+
+- ASP.NET Core **Minimal APIs** (.NET 8) e C#
+- Clean Architecture (Domain, Application, Infrastructure, API)
+- Entity Framework Core 8 + Oracle.EntityFrameworkCore
+- Swagger / OpenAPI (Swashbuckle)
+- JWT Bearer (`Microsoft.AspNetCore.Authentication.JwtBearer`)
+- ASP.NET Core Rate Limiting
+- Microsoft.Extensions.Diagnostics.HealthChecks (+ EF Core check)
+- xUnit, Moq, WebApplicationFactory, EF InMemory (testes)
+
+---
+
+## 2. Arquitetura
+
+### Camadas
+
+| Camada | Projeto | Responsabilidade |
+|---|---|---|
+| Domain | `HidroBairro.Domain` | Entidades, rules, exceptions |
+| Application | `HidroBairro.Application` | Services, DTOs, `ServiceResult`, abstrações (repos / UoW) |
+| Infrastructure | `HidroBairro.Infrastructure` | EF Core, Oracle, repositórios, migrations |
+| API | `HidroBairro.API` | Minimal endpoints, Swagger, JWT, rate limit, health |
+| Testes | `UnitTests` / `IntegrationTests` | Rules/services + smoke HTTP |
+
+Dependências fluem para dentro: `API → Application/Infrastructure`; `Infrastructure → Application → Domain`. O Domain não referencia outras camadas.
+
+### Domínio e tabelas Oracle
+
+| Entidade | Tabela | Dono |
 |---|---|---|
 | `CategoriaSolicitacao` | `CATEGORIA_SOLICITACAO_HB` | .NET |
 | `SolicitacaoServico` | `SOLICITACAO_SERVICO_HB` | .NET |
 | `HistoricoStatus` | `HISTORICO_STATUS_HB` | .NET |
-| `UsuarioRef` | `USUARIO_HB` | Java (só FK) |
-| `PontoMonitoramentoRef` | `PONTO_MONITORAMENTO_HB` | Java (só FK) |
+| `UsuarioRef` | `USUARIO_HB` | Java (só FK / leitura) |
+| `PontoMonitoramentoRef` | `PONTO_MONITORAMENTO_HB` | Java (só FK / leitura) |
 
-Rules: `SolicitacaoRules`, `StatusTransitionRules`, `IdempotencyRules`, `CategoriaRules`.  
-Status: `RECEBIDA` → `EM_VISTORIA` → `CONCLUIDA` (ou `CANCELADA`).
+Migrations .NET **não** criam `USUARIO_HB` / `PONTO_MONITORAMENTO_HB` (`ExcludeFromMigrations`).
 
-## Persistência / Oracle (etapa 3)
+### Estrutura de pastas
 
-`AppDbContext` + Fluent API em `src/HidroBairro.Infrastructure/Persistence/`.  
-Migrations criam só as 3 tabelas .NET. `USUARIO_HB` e `PONTO_MONITORAMENTO_HB` estão com `ExcludeFromMigrations` (já existem no schema Java).
+```text
+HidroBairro.sln
+├── src/
+│   ├── HidroBairro.Domain/
+│   ├── HidroBairro.Application/
+│   ├── HidroBairro.Infrastructure/
+│   │   └── Persistence/          # DbContext, configs, repos, Migrations
+│   └── HidroBairro.API/
+│       ├── Auth/
+│       ├── Endpoints/
+│       └── Extensions/           # Swagger, JWT, rate limit, health
+└── tests/
+    ├── HidroBairro.UnitTests/
+    └── HidroBairro.IntegrationTests/
+```
 
-### Credenciais (Oracle + JWT + health Java)
+---
 
-**As senhas / secret reais ficam no arquivo `IDENTIFICACAO_GRUPO.txt`** (entregue no `.zip` do Portal).  
-Os `appsettings*.json` no GitHub usam **placeholders** de propósito.
+## 3. Instalação e execução
 
-Copie do `.txt` para `src/HidroBairro.API/appsettings.Development.json`:
+### Pré-requisitos
 
-| Campo no JSON | De onde vem no `.txt` |
+- .NET 8 SDK (`global.json` no repo)
+- Oracle FIAP (schema compartilhado com o Java; tabelas Java já criadas)
+- Valores de conexão / JWT / health Java no arquivo **`IDENTIFICACAO_GRUPO.txt`**
+
+### Clonar
+
+```bash
+git clone <URL_DO_REPOSITORIO>
+cd "GS_HB - DOTNET"
+```
+
+### Configurar credenciais (obrigatório)
+
+Os `appsettings*.json` no GitHub usam **placeholders** (sem senha real).
+
+1. Abra `IDENTIFICACAO_GRUPO.txt`
+2. Copie para `src/HidroBairro.API/appsettings.Development.json`:
+
+| Campo JSON | Conteúdo |
 |---|---|
-| `ConnectionStrings:OracleConnection` | User Id + Password + Data Source |
-| `Auth:Key` | JWT secret Base64 (mesmo do Java) — **substitua** o placeholder `AAA...=` |
+| `ConnectionStrings:OracleConnection` | User Id + Password + Data Source do `.txt` |
+| `Auth:Key` | JWT secret Base64 (mesmo do Java) |
 | `Auth:KeyIsBase64` | `true` |
+| `Auth:LocalIssuerEnabled` | `true` (permite `dev-token` na correção) |
 | `HealthChecks:JavaApiUrl` | URL de health da API Java |
+
+Exemplo:
 
 ```json
 "ConnectionStrings": {
   "OracleConnection": "User Id=SEU_RM;Password=SUA_SENHA;Data Source=oracle.fiap.com.br:1521/ORCL;"
 },
 "Auth": {
-  "Key": "COLE_AQUI_O_SECRET_BASE64_DO_TXT",
+  "Enabled": true,
+  "LocalIssuerEnabled": true,
+  "Key": "COLE_O_SECRET_BASE64_DO_TXT",
   "KeyIsBase64": true,
-  "LocalIssuerEnabled": true
+  "ValidateIssuer": false,
+  "ValidateAudience": false
 },
 "HealthChecks": {
   "JavaApiUrl": "http://localhost:8080/actuator/health"
 }
 ```
 
-O `Key` dummy `AAA...=` no repo só existe para o projeto compilar; **sem o secret real do `.txt`, token Java e dev-token de correção não batem.**
 
-**Não commite senha Oracle no GitHub público.**
+### Banco Oracle do zero (outro schema / professor)
 
-> **Oracle + CHECK:** não use `HasCheckConstraint` no Fluent — as aspas (`'S'`) quebram o `EXECUTE IMMEDIATE` do provider (ORA-06550). Os CHECKs vão na migration via `Sql()` com `''S''`.  
-> **Timestamps:** `CRIADO_EM` / `ATUALIZADO_EM` têm `DEFAULT CURRENT_TIMESTAMP` na `InitialZeladoria`.  
-> **Seed de categoria:** fica no script SQL do grupo — a migration **não** insere categorias.
+A migration .NET cria só `CATEGORIA_SOLICITACAO_HB`, `SOLICITACAO_SERVICO_HB` e `HISTORICO_STATUS_HB`, com **FK** para tabelas Java. Por isso a ordem é obrigatória:
 
-### Comandos de migration (você roda)
-
-Na raiz do repo (`F:\GS_HB - DOTNET`), com a API parada:
+| Passo | O quê | Arquivo / comando |
+|---|---|---|
+| **1** | DDL das tabelas Java | `scripts/01_ddl_java_oracle.sql` (SQL Developer) |
+| **2** | Migration .NET | `dotnet ef database update` (abaixo) |
+| **3** | Seeds (usuários, pontos, categorias, amostras) | `scripts/02_seed_oracle.sql` |
 
 ```powershell
-# (uma vez) ferramenta EF
-dotnet tool install --global dotnet-ef --version 8.0.11
-
-# 1) Gera a migration (NÃO aplica no banco)
-dotnet ef migrations add InitialZeladoria `
-  --project src/HidroBairro.Infrastructure `
-  --startup-project src/HidroBairro.API `
-  --output-dir Persistence/Migrations
-
-# 2) Revise o arquivo gerado em Persistence/Migrations:
-#    - deve criar CATEGORIA_SOLICITACAO_HB, SOLICITACAO_SERVICO_HB, HISTORICO_STATUS_HB
-#    - NÃO deve CREATE TABLE USUARIO_HB / PONTO_MONITORAMENTO_HB
-#    - FKs para USUARIO_HB e PONTO_MONITORAMENTO_HB são esperadas
-
-# 3) Aplica no Oracle (só quando a connection string estiver certa)
+# Passo 2 — API parada; connection string já configurada
 dotnet ef database update `
   --project src/HidroBairro.Infrastructure `
   --startup-project src/HidroBairro.API
 ```
 
-A `InitialZeladoria` já aplica COMMENT ON + CHECKs. Categorias: use o script SQL do grupo após o `database update`.
+**Não** rode o seed (passo 3) antes da migration: os `INSERT` em `CATEGORIA_*` / `SOLICITACAO_*` / `HISTORICO_*` precisam das tabelas .NET.
 
-Pré-requisito: tabelas Java (`USUARIO_HB`, `PONTO_MONITORAMENTO_HB`, …) já criadas no mesmo schema.
+Se o schema **já** tem as tabelas Java (caso usual do grupo na FIAP), pule o passo 1 e use só migration (se faltar) + seed conforme necessário.
 
-## API HTTP + Swagger (etapa 5)
-
-Contrato para Mobile (fetch/axios).
-
-| Método | Rota | Notas |
-|---|---|---|
-| GET | `/api/categorias` | Categorias ativas |
-| POST | `/api/solicitacoes` | Header **`Idempotency-Key`** obrigatório → **201**; replay da mesma key → **200** (não duplica) |
-| GET | `/api/solicitacoes` | Query: `page`, `pageSize`, `status`, `somenteDoUsuario` |
-| GET | `/api/solicitacoes/{id}` | |
-| GET | `/api/solicitacoes/{id}/historico` | Trilha de status (abertura → mudanças) |
-| PUT | `/api/solicitacoes/{id}` | Edita título/descrição se `RECEBIDA` |
-| POST | `/api/solicitacoes/{id}/cancelar` | Query opcional `observacao` |
-| PATCH | `/api/solicitacoes/{id}/status` | Body: `{ "statusNovo", "observacao?" }` |
-| POST | `/api/auth/dev-token` | Emite JWT **local** (só se `Auth:LocalIssuerEnabled=true`) |
-
-## JWT (etapa 7) — alinhado ao Java
-
-O .NET **valida** o JWT emitido no login Java (não faz login).
-
-### Contrato atual (Java)
-
-| Item | Valor |
-|---|---|
-| Algoritmo | HS256 |
-| Secret | Base64 (`Auth:Key` + `KeyIsBase64=true`) |
-| `sub` | **email** do usuário (`USUARIO_HB.EMAIL`) |
-| `role` | `CIDADAO` ou `GESTOR` |
-| `iss` / `aud` | não usados (`ValidateIssuer/Audience=false`) |
-| Validade | tipicamente ~24h (`exp` no token) |
-
-O .NET resolve `sub` (email) → `USUARIO_HB.ID` para gravar FK nas solicitações.
-
-### Config (`Auth`)
-
-| Chave | Produção / Java | Development |
-|---|---|---|
-| `Enabled` | `true` | `true` |
-| `LocalIssuerEnabled` | `false` | `true` (fallback `POST /api/auth/dev-token`) |
-| `Key` | secret Base64 do Java | **mesmo** |
-| `KeyIsBase64` | `true` | `true` |
-| `ValidateIssuer` | `false` | `false` |
-| `ValidateAudience` | `false` | `false` |
-
-Policies: `CIDADAO`, `GESTOR`, `CidadaoOuGestor`. Sem token / inválido / email inexistente → **401**.
-
-### Testar com token do Java
-
-1. Login na API Java → copie o `token`
-2. Swagger .NET → **Authorize** → cole só o `eyJ...` (sem `Bearer `)
-3. `GET /api/categorias` → **200** se o email do `sub` existir em `USUARIO_HB`
-4. Token expirado / secret errado / sem role → **401**
-
-### Testar com JWT local (Dev)
-
-```json
-{ "email": "carla.souza@email.com", "papel": "CIDADAO" }
-```
-
-| Cenário | email | papel |
-|---|---|---|
-| Cidadão | email de um `CIDADAO` no seed | `CIDADAO` |
-| Gestor | email de um `GESTOR` no seed | `GESTOR` |
-
-Usuários do seed atual (`USUARIO_HB` — domínio Java; .NET só usa o id na FK):
-
-| ID | Nome | Email | Papel | Ativo |
-|---|---|---|---|---|
-| 1 | Carla Souza | carla.souza@email.com | CIDADAO | S |
-| 2 | Joao Mendes | joao.mendes@email.com | CIDADAO | S |
-| 3 | Ana Ribeiro | ana.ribeiro@email.com | CIDADAO | S |
-| 4 | Pedro Lima | pedro.lima@email.com | CIDADAO | S |
-| 5 | Fernanda Dias | fernanda.dias@email.com | CIDADAO | S |
-| 6 | Lucas Alves | lucas.alves@email.com | CIDADAO | S |
-| 7 | Mariana Costa | mariana.costa@email.com | CIDADAO | S |
-| 8 | Rafael Nunes | rafael.nunes@email.com | CIDADAO | S |
-| 9 | Beatriz Rocha | beatriz.rocha@email.com | CIDADAO | S |
-| 10 | Thiago Martins | thiago.martins@email.com | CIDADAO | S |
-| 11 | Patricia Gomes | patricia.gomes@email.com | CIDADAO | S |
-| 12 | Bruno Teixeira | bruno.teixeira@email.com | GESTOR | S |
-| 13 | Camila Freitas | camila.freitas@email.com | GESTOR | S |
-| 14 | Diego Araujo | diego.araujo@email.com | CIDADAO | S |
-| 15 | Helena Pinto | helena.pinto@email.com | CIDADAO | N |
-
-Para conferir no Oracle (opcional):
-
-```sql
-SELECT ID, NOME, EMAIL, PAPEL, ATIVO
-FROM USUARIO_HB
-ORDER BY ID;
-```
-
-Status de erro: **400** regra, **403** forbidden, **404** not found, **409** conflict, **429** rate limit.
-
-## Rate limiting + Health (etapa 6)
-
-### Rate limiting
-- Política `api` (fixed window) aplicada em `/api/categorias` e `/api/solicitacoes`
-- Partição por IP (fallback: `X-User-Id`)
-- Config em `RateLimiting` (`PermitLimit`, `WindowSeconds`, `QueueLimit`)
-- Excesso → **HTTP 429** + JSON `{ error, message, status }` e header `Retry-After` quando disponível
-- `/`, `/health/*` e Swagger **não** entram na política `api`
-
-Defaults: **60 req / 60s** (produção); **120 / 60s** em Development.
-
-Para forçar 429 no teste: baixe `PermitLimit` para `5` em `appsettings.Development.json` e spamme `GET /api/categorias`.
-
-### Health checks (API + Oracle + Java)
-| Rota | Checks |
-|---|---|
-| `GET /health/live` | `self` (processo) |
-| `GET /health/ready` | `oracle` (EF/DbContext) + `java-api` (HTTP na URL configurada) |
-
-- Preencha `HealthChecks:JavaApiUrl` com o endpoint de health da API Java (ex.: `/actuator/health` ou a rota que o grupo Java expuser). Valor também no `IDENTIFICACAO_GRUPO.txt`.
-- Se a URL estiver vazia ou a Java estiver offline, o check `java-api` fica **Degraded** (ainda aparece no JSON; Oracle Healthy mantém a API utilizável).
-- Peça a URL exata à pessoa do Java e cole no `.txt` + `appsettings.Development.json` antes da correção/apresentação.
-
-## Como o professor / avaliador sobe a API
-
-Pré-requisitos: **.NET 8 SDK**, acesso ao **Oracle FIAP** do grupo, valores do **`IDENTIFICACAO_GRUPO.txt`**.
-
-### 1) Colar credenciais
-Abra `IDENTIFICACAO_GRUPO.txt` e copie para `src/HidroBairro.API/appsettings.Development.json`:
-1. `OracleConnection`
-2. `Auth:Key` (secret Base64) — mantenha `KeyIsBase64: true` e `LocalIssuerEnabled: true`
-3. `HealthChecks:JavaApiUrl` (se a Java estiver acessível)
-
-### 2) Subir
-Na raiz do repositório:
+### Rodar a API
 
 ```powershell
 dotnet restore HidroBairro.sln
@@ -250,61 +220,267 @@ dotnet build HidroBairro.sln
 dotnet run --project src/HidroBairro.API --launch-profile http
 ```
 
-- Base: `http://localhost:5080`
-- Swagger: `http://localhost:5080/swagger`
-- Live: `http://localhost:5080/health/live`
-- Ready: `http://localhost:5080/health/ready`
+| Recurso | URL |
+|---|---|
+| Base | `http://localhost:5080` |
+| Swagger UI | `http://localhost:5080/swagger` |
+| OpenAPI JSON | `http://localhost:5080/swagger/v1/swagger.json` |
+| Health live | `http://localhost:5080/health/live` |
+| Health ready | `http://localhost:5080/health/ready` |
 
-### 3) Autenticar no Swagger (duas opções)
+---
 
-**A — Token local (recomendado na correção; não depende do Java)**  
-1. `POST /api/auth/dev-token`  
-   ```json
-   { "email": "EMAIL_EXISTENTE_EM_USUARIO_HB", "papel": "CIDADAO" }
-   ```
-   (ex.: um email do seed / tabela `USUARIO_HB`)  
-2. Copiar `accessToken` → **Authorize** → colar **só** o `eyJ...` (sem a palavra Bearer)  
-3. `GET /api/categorias` → 200  
+## 4. Autenticação JWT
 
-**B — Token Java**  
-1. Login na API Java → copiar o `token`  
-2. Authorize no Swagger .NET da mesma forma  
-3. Token Java costuma durar ~24h; se expirar, gere outro no Java **ou** use a opção A  
+Esta API **não faz login**. O Java emite o JWT; o .NET **valida** o mesmo token (secret Base64 compartilhado).
 
-### 4) Fluxo rápido para validar a nota
+### Contrato (alinhado ao Java)
 
-1. Sem Authorize → `GET /api/categorias` → **401**  
-2. Com token → `GET /api/categorias` → **200**  
-3. `POST /api/solicitacoes` + header `Idempotency-Key` → **201**; repetir a mesma key → **200** (não duplica)  
-4. Spam de requests (ou `PermitLimit` baixo) → **429**  
-5. `GET /health/live` e `GET /health/ready` → checks `self` / `oracle` / `java-api`
+| Item | Valor |
+|---|---|
+| Algoritmo | HS256 |
+| Secret | Base64 (`Auth:Key` + `KeyIsBase64=true`) |
+| `sub` | **email** do usuário (`USUARIO_HB.EMAIL`) |
+| `role` | `CIDADAO` ou `GESTOR` |
+| `iss` / `aud` | não validados |
+| Validade típica (Java) | ~24h |
+
+O .NET resolve `sub` (email) → `USUARIO_HB.ID` para FKs.
+
+### Endpoints de auth nesta API
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/auth/dev-token` | Não | Emite JWT **local** (só se `LocalIssuerEnabled=true`) no mesmo formato do Java |
+
+Body:
+
+```json
+{ "email": "usuario@email.com", "papel": "CIDADAO" }
+```
+
+O email precisa existir em `USUARIO_HB`.
+
+### Authorize no Swagger
+
+1. Obtenha um token (**dev-token** ou login Java).
+2. Copie **somente** o valor `eyJ...` (sem escrever `Bearer `).
+3. Cadeado **Authorize** → colar → Authorize → Close.
+4. `GET /api/categorias` → **200**.
+
+Erro comum: colar `Bearer eyJ...` → vira `Bearer Bearer ...` → **401 invalid_token**.
+
+### Duas formas de testar
+
+| Opção | Quando usar |
+|---|---|
+| **A — `dev-token`** | Correção / demo sem depender do Java |
+| **B — token Java** | Provar integração real (renovar se passar ~24h) |
+
+Mutations e consultas de zeladoria exigem JWT (`CidadaoOuGestor`). Sem token → **401**.
+
+---
+
+## 5. Idempotência e Rate Limiting
+
+### Idempotência (requisito de requisições repetidas)
+
+`POST /api/solicitacoes` exige header **`Idempotency-Key`** (string única por tentativa de envio, máx. 80 chars).
+
+| Situação | Resultado |
+|---|---|
+| Primeira vez com a key | **201** + cria a solicitação |
+| Mesma key de novo | **200** + devolve a mesma (não duplica) |
+| Sem header | **400** |
+
+No Mobile: gerar UUID por toque em “Enviar”; em retry de rede, reenviar a **mesma** key.
+
+### Rate limiting
+
+- Política `api` (fixed window) em `/api/categorias` e `/api/solicitacoes`
+- Excesso → **HTTP 429** + JSON de erro (+ `Retry-After` quando disponível)
+- `/`, `/health/*` e Swagger fora da política
+- Defaults: 60 req/60s (base); 120/60s em Development
+
+Para forçar 429 no teste: baixe `RateLimiting:PermitLimit` para `5` e spamme `GET /api/categorias`.
+
+---
+
+## 6. Documentação dos endpoints
+
+Documentação interativa: `http://localhost:5080/swagger`  
+OpenAPI JSON: `http://localhost:5080/swagger/v1/swagger.json`
+
+### Auth (local / Dev)
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/auth/dev-token` | Não | Emite JWT local (`email` + `papel`) |
+
+### Categorias
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/categorias` | Sim | Lista categorias ativas |
+
+### Solicitações
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/solicitacoes` | Sim | Abre chamado (**Idempotency-Key** obrigatório) |
+| GET | `/api/solicitacoes` | Sim | Lista (`page`, `pageSize`, `status`, `somenteDoUsuario`) |
+| GET | `/api/solicitacoes/{id}` | Sim | Detalhe |
+| GET | `/api/solicitacoes/{id}/historico` | Sim | Histórico de status |
+| PUT | `/api/solicitacoes/{id}` | Sim | Edita título/descrição (se `RECEBIDA`) |
+| POST | `/api/solicitacoes/{id}/cancelar` | Sim | Cancela (`observacao` query opcional) |
+| PATCH | `/api/solicitacoes/{id}/status` | Sim | Muda status (gestor operacional / cidadão cancela) |
+
+### Health
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/health/live` | Liveness (`self`) |
+| GET | `/health/ready` | Readiness (`oracle` + `java-api`) |
+
+### Body de criação (referência)
+
+`POST /api/solicitacoes`:
+
+```json
+{
+  "categoriaId": 1,
+  "titulo": "Bueiro entupido",
+  "descricao": "Água acumulada na sarjeta",
+  "pontoId": null,
+  "latitude": -23.65,
+  "longitude": -46.75
+}
+```
+
+Informe `pontoId` **ou** `latitude`/`longitude`.
+
+`PATCH .../status`:
+
+```json
+{ "statusNovo": "EM_VISTORIA", "observacao": "Equipe a caminho" }
+```
+
+Status válidos: `RECEBIDA`, `EM_VISTORIA`, `CONCLUIDA`, `CANCELADA`.
+
+---
+
+## 7. Guia de testes no Swagger
+
+### Checklist rápido (demo / professor)
+
+1. Colar credenciais do `IDENTIFICACAO_GRUPO.txt` no `appsettings.Development.json`
+2. `dotnet run --project src/HidroBairro.API --launch-profile http`
+3. `dotnet test HidroBairro.sln` → verde
+4. `/health/live` → Healthy; `/health/ready` → `oracle` Healthy (+ `java-api`)
+5. Sem Authorize → `GET /api/categorias` → **401**
+6. `dev-token` → Authorize → `GET /api/categorias` → **200**
+7. `POST /api/solicitacoes` + `Idempotency-Key` → **201**; repetir key → **200**
+8. (Opcional) token Java no Authorize → mesmo fluxo
+9. Spam / limite baixo → **429**
+
+### Passo a passo sugerido
+
+**Passo 1 — Token local**
+
+`POST /api/auth/dev-token`
+
+```json
+{ "email": "EMAIL_EXISTENTE_EM_USUARIO_HB", "papel": "CIDADAO" }
+```
+
+Authorize com o `accessToken`.
+
+**Passo 2 — Categorias**
+
+`GET /api/categorias` → anote um `id` de categoria.
+
+**Passo 3 — Criar solicitação**
+
+`POST /api/solicitacoes`  
+Header: `Idempotency-Key: demo-001`  
+Body: `categoriaId` + título/descrição + lat/long (ou `pontoId`).
+
+Esperado: **201**. Anote o `id`.
+
+**Passo 4 — Idempotência**
+
+Repita o mesmo POST com a **mesma** `Idempotency-Key` → **200**, mesmo `id`.
+
+**Passo 5 — Listar / detalhe / histórico**
+
+- `GET /api/solicitacoes`
+- `GET /api/solicitacoes/{id}`
+- `GET /api/solicitacoes/{id}/historico`
+
+**Passo 6 — Gestor (opcional)**
+
+`dev-token` com `"papel": "GESTOR"` e email de gestor no seed →  
+`GET /api/solicitacoes?somenteDoUsuario=false` →  
+`PATCH /api/solicitacoes/{id}/status`.
+
+### Cenários de erro
+
+| Situação | Esperado |
+|---|---|
+| Endpoint protegido sem token | **401** |
+| Token inválido / expirado / secret errado | **401** |
+| Email do `sub` inexistente em `USUARIO_HB` | **401** |
+| POST sem `Idempotency-Key` | **400** |
+| Regra de negócio (ex.: editar fora de `RECEBIDA`) | **400** |
+| Cidadão acessando chamado de outro | **403** |
+| Rate limit excedido | **429** |
+
+---
+
+## 8. Testes automatizados
+
+### Projetos
+
+| Projeto | Cobertura |
+|---|---|
+| `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (Moq); padrão AAA |
+| `HidroBairro.IntegrationTests` | `WebApplicationFactory` + EF InMemory: JWT local, 401, categorias, create, idempotência, list, health |
 
 ```powershell
 dotnet test HidroBairro.sln
 ```
 
-## Testes + entrega (etapa 8)
+Os integration tests **não** dependem do Oracle nem do Java em execução.
 
-| Projeto | O que cobre |
-|---|---|
-| `HidroBairro.UnitTests` | Rules de domínio + `SolicitacaoService` (Moq) |
-| `HidroBairro.IntegrationTests` | `WebApplicationFactory` + EF InMemory: health, JWT local, 401, categorias, create, idempotência, list |
+---
 
-Os integration tests **não** dependem do Oracle nem do Java.
+## 9. Observabilidade (Health Checks)
 
-### Entrega (Portal)
-1. Repositório no GitHub com este README  
-2. `IDENTIFICACAO_GRUPO.txt` preenchido (integrantes + Oracle + JWT secret + JavaApiUrl)  
-3. `.zip` = **link do GitHub** + o **`.txt`**  
+| Check | Onde | Significado |
+|---|---|---|
+| `self` | `/health/live` | Processo da API no ar |
+| `oracle` | `/health/ready` | Consegue abrir conexão via EF/`AppDbContext` |
+| `java-api` | `/health/ready` | HTTP GET em `HealthChecks:JavaApiUrl` |
 
+- URL da Java no `.txt` + `appsettings` (ex.: Actuator `/actuator/health` ou rota equivalente do grupo).
+- Sem URL ou Java offline → check `java-api` fica **Degraded** (ainda aparece no JSON; não impede uso da API se Oracle estiver Healthy).
 
-## Etapas
+Também: rate limiting (429) como proteção operacional.
 
-1. ~~Scaffold Clean Architecture~~ ✅  
-2. ~~Domain (entidades + rules)~~ ✅  
-3. ~~DbContext + configs Oracle (migration: você aplica)~~ ✅  
-4. ~~Application (repos, UoW, services, idempotência, testes)~~ ✅  
-5. ~~Endpoints Minimal API + Swagger~~ ✅  
-6. ~~Rate limiting + Health Checks~~ ✅  
-7. ~~JWT (validação + issuer local Dev)~~ ✅  
-8. ~~Testes + README + IDENTIFICACAO_GRUPO.txt~~ ✅  
+---
+
+## 10. Entrega
+
+### Portal do Aluno
+
+1. Repositório GitHub com este README  
+2. `IDENTIFICACAO_GRUPO.txt` preenchido (integrantes + Oracle + JWT secret + JavaApiUrl + token opcional)  
+3. `.zip` = **link do GitHub** + o **`.txt`**
+
+### Observações finais
+
+- Clean Architecture, DI, Repository + Unit of Work, `ServiceResult` → HTTP.
+- Oracle compartilhado com Java; .NET só migra as 3 tabelas de zeladoria.
+- JWT: Java emite, .NET valida; `dev-token` facilita correção.
+- Idempotência + Rate Limiting + Health (API, banco, serviço externo) + Swagger + xUnit atendem a rubrica da disciplina.
+- Valor CitizenTech: canal cidadão para zeladoria urbana no piloto Zona Sul (HidroBairro Sul).
