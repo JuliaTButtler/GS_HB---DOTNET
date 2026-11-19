@@ -35,19 +35,42 @@ Repositório: https://github.com/JuliaTButtler/GS_HB---DOTNET.git
 
 ### Contexto e problema
 
-A Zona Sul de São Paulo concentra ocorrências relevantes de alagamento. O cidadão precisa de um canal simples para **registrar problemas de zeladoria** (bueiro entupido, boca de lobo, rua intransitável) e acompanhar o status, sem depender só de WhatsApp ou canais genéricos.
+A Global Solution 2026/2 pede uma **CitizenTech**: tecnologia centrada no cidadão, com benefício concreto e alinhada a ODS. O piloto do grupo é a **Zona Sul de São Paulo** (Campo Limpo, Capão Redondo e M’Boi Mirim).
 
-No HidroBairro Sul, risco/alertas/IA ficam na **API Java**; o **.NET** responde pela jornada “quero que alguém resolva isso” e “em que pé está meu chamado?”.
+No 1º trimestre de 2026 a Zona Sul liderou ocorrências de alagamento/inundação na cidade (ex.: **201** registros, à frente da Zona Leste), com Campo Limpo entre os principais vetores (*Folha de S.Paulo*). A Prefeitura já monitora via **CGE**, mas o morador comum costuma depender de WhatsApp do condomínio ou “olhar pela janela” — pouco antecipação de risco e **nenhum canal simples** para pedir desobstrução de bueiro/boca de lobo e acompanhar o chamado.
 
-### Solução proposta
+**Persona:** Carla Souza, 34 anos, Capão Redondo — usa ônibus até o Terminal Campo Limpo; já perdeu tempo em rua alagada; precisa saber se consegue sair de casa **e** reportar problema de zeladoria no caminho.
 
-Backend .NET de **zeladoria** consumido pelo app Mobile (React Native):
+ODS: **11** (cidades sustentáveis), **13** (ação climática); complementarmente 9 e 10.
 
-- categorias de chamado;
-- abertura de solicitação com **idempotência** (não duplica se o usuário apertar enviar duas vezes);
-- listagem, detalhe, histórico de status, edição, cancelamento e mudança de status (gestor);
-- **JWT** emitido pelo Java e **validado** nesta API (mesmo secret Base64);
-- **rate limiting**, **Health Checks** (self + Oracle + API Java) e testes xUnit.
+### Solução proposta (produto HidroBairro Sul)
+
+**HidroBairro Sul** é um app cidadão (React Native) + dois backends com domínios distintos e **um Oracle compartilhado**:
+
+| Capacidade do produto | Quem entrega |
+|---|---|
+| Risco de alagamento em pontos monitorados (sensores + alertas) | API **Java** |
+| Orientação com IA (“posso sair de casa?”, “o que fazer agora?”) | API **Java** (Spring AI / RAG local) |
+| Login/cadastro e papéis `CIDADAO` / `GESTOR` | API **Java** (emite JWT) |
+| Abrir e acompanhar solicitações de zeladoria | API **.NET** (este repositório) |
+| Visão do gestor: alertas + status dos chamados | Java (alertas) + .NET (chamados) |
+| Experiência na tela (jornada unificada) | App **Mobile** |
+
+**Por que dois backends:** Java responde *“quem é você?”* e *“está perigoso agora?”*; .NET responde *“quero que alguém resolva isso”* e *“em que pé está meu chamado?”*. O mobile orquestra a UX; Oracle é a fonte da verdade (Mongo entra na disciplina de banco como espelho/documental).
+
+**Jornada típica (chuva à tarde):** alerta no ponto piloto → pergunta à IA → no caminho vê boca de lobo entupida → abre solicitação no .NET → acompanha `RECEBIDA` → `EM_VISTORIA` → `CONCLUIDA`; o gestor prioriza pela área.
+
+### Papel desta API (.NET) no produto
+
+Este repositório é a fatia **Advanced Business Development with .NET**: backend de **zeladoria / serviço ao cidadão**, consumido pelo Mobile:
+
+- categorias e CRUD de solicitações (criar, listar, detalhe, editar, cancelar);
+- histórico e mudança de status (gestor operacional / cidadão cancela);
+- **idempotência** (`Idempotency-Key`) para não duplicar envio;
+- **JWT** emitido pelo Java e **validado** aqui (mesmo secret);
+- **rate limiting** (HTTP 429), **Health Checks** (self + Oracle + API Java) e testes xUnit.
+
+Deploy desta API já está disponível no render: https://hidrobairro-api-dotnet.onrender.com
 
 ### O que a API permite
 
@@ -186,12 +209,12 @@ Exemplo:
   "ValidateAudience": false
 },
 "HealthChecks": {
-  "JavaApiUrl": "http://localhost:8080/actuator/health"
+  "JavaApiUrl": "https://hidrobairro-java-gs2.onrender.com/actuator/health"
 }
 ```
 
 
-### Banco Oracle do zero (outro schema / professor)
+### Banco Oracle do zero
 
 A migration .NET cria só `CATEGORIA_SOLICITACAO_HB`, `SOLICITACAO_SERVICO_HB` e `HISTORICO_STATUS_HB`, com **FK** para tabelas Java. Por isso a ordem é obrigatória:
 
@@ -228,40 +251,6 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 | Health live | `http://localhost:5080/health/live` |
 | Health ready | `http://localhost:5080/health/ready` |
 
-### Deploy no Render (Docker — sem instalar Docker no PC)
-
-O `Dockerfile` fica na **raiz do repositório**. O Render clona o GitHub e builda na **nuvem**.
-
-1. Faça push deste repo para o GitHub (`GS_HB---DOTNET`).
-2. Acesse [https://dashboard.render.com](https://dashboard.render.com) (conta com login GitHub).
-3. **New → Web Service** → selecione o repositório.
-4. Configuração:
-   - **Runtime:** Docker
-   - **Dockerfile Path:** `./Dockerfile` (raiz)
-   - **Branch:** `main` (ou a branch que você usa)
-5. **Environment Variables** (Environment):
-
-| Key | Exemplo / valor |
-|---|---|
-| `ASPNETCORE_ENVIRONMENT` | `Development` (libera Swagger + `dev-token`) |
-| `ConnectionStrings__OracleConnection` | connection string do Oracle FIAP |
-| `Auth__Key` | JWT secret Base64 (mesmo do Java) |
-| `Auth__KeyIsBase64` | `true` |
-| `Auth__Enabled` | `true` |
-| `Auth__LocalIssuerEnabled` | `true` |
-| `Auth__ValidateIssuer` | `false` |
-| `Auth__ValidateAudience` | `false` |
-| `HealthChecks__JavaApiUrl` | (vazio por enquanto; preencher depois) |
-
-6. **Create Web Service** → aguarde o deploy.
-7. URL pública: `https://<nome-do-servico>.onrender.com`  
-   - Swagger: `https://<nome>/swagger`  
-   - Health: `https://<nome>/health/live`  
-   - Essa URL base é a que você manda para o Mobile.
-
-**Obs.:** plano Free “dorme” com idle; a 1ª request pode demorar. Oracle FIAP precisa aceitar conexão da internet do Render (se `/health/ready` falhar no `oracle`, é rede/firewall).
-
----
 
 ## 4. Autenticação JWT
 
@@ -286,13 +275,46 @@ O .NET resolve `sub` (email) → `USUARIO_HB.ID` para FKs.
 |---|---|---|---|
 | POST | `/api/auth/dev-token` | Não | Emite JWT **local** (só se `LocalIssuerEnabled=true`) no mesmo formato do Java |
 
-Body:
+Body (exemplos reais de `USUARIO_HB`):
 
 ```json
-{ "email": "usuario@email.com", "papel": "CIDADAO" }
+{ "email": "carla.souza@email.com", "papel": "CIDADAO" }
 ```
 
-O email precisa existir em `USUARIO_HB`.
+```json
+{ "email": "bruno.teixeira@email.com", "papel": "GESTOR" }
+```
+
+```json
+{ "email": "george@email.com", "papel": "CIDADAO" }
+```
+
+O email precisa existir em `USUARIO_HB` (tabela abaixo). O `papel` do body deve bater com o papel cadastrado.
+
+### Usuários de teste (`USUARIO_HB`)
+
+Para o professor gerar `dev-token` ou validar JWT Java sem inventar e-mail:
+
+| Id | Nome | Email | Papel | Ativo |
+|---|---|---|---|---|
+| 1 | Carla Souza | `carla.souza@email.com` | CIDADAO | S |
+| 2 | Joao Mendes | `joao.mendes@email.com` | CIDADAO | S |
+| 3 | Ana Ribeiro | `ana.ribeiro@email.com` | CIDADAO | S |
+| 4 | Pedro Lima | `pedro.lima@email.com` | CIDADAO | S |
+| 5 | Fernanda Dias | `fernanda.dias@email.com` | CIDADAO | S |
+| 6 | Lucas Alves | `lucas.alves@email.com` | CIDADAO | S |
+| 7 | Mariana Costa | `mariana.costa@email.com` | CIDADAO | S |
+| 8 | Rafael Nunes | `rafael.nunes@email.com` | CIDADAO | S |
+| 9 | Beatriz Rocha | `beatriz.rocha@email.com` | CIDADAO | S |
+| 10 | Thiago Martins | `thiago.martins@email.com` | CIDADAO | S |
+| 11 | Patricia Gomes | `patricia.gomes@email.com` | CIDADAO | S |
+| 12 | Bruno Teixeira | `bruno.teixeira@email.com` | GESTOR | S |
+| 13 | Camila Freitas | `camila.freitas@email.com` | GESTOR | S |
+| 14 | Diego Araujo | `diego.araujo@email.com` | CIDADAO | S |
+| 15 | Helena Pinto | `helena.pinto@email.com` | CIDADAO | N |
+| 41 | George Harrison | `george@email.com` | CIDADAO | S |
+
+Sugestões rápidas: cidadão → Carla / Ana / George · gestor → Bruno / Camila · **não use Helena** (`Ativo = N`).
 
 ### Authorize no Swagger
 
@@ -308,7 +330,7 @@ Erro comum: colar `Bearer eyJ...` → vira `Bearer Bearer ...` → **401 invalid
 | Opção | Quando usar |
 |---|---|
 | **A — `dev-token`** | Correção / demo sem depender do Java |
-| **B — token Java** | Provar integração real (renovar se passar ~24h) |
+| **B — token Java** | Provar integração real (renovado a cada ~24h) |
 
 Mutations e consultas de zeladoria exigem JWT (`CidadaoOuGestor`). Sem token → **401**.
 
@@ -375,27 +397,61 @@ OpenAPI JSON: `http://localhost:5080/swagger/v1/swagger.json`
 | GET | `/health/live` | Liveness (`self`) |
 | GET | `/health/ready` | Readiness (`oracle` + `java-api`) |
 
-### Body de criação (referência)
+### Bodies de exemplo (Swagger)
 
-`POST /api/solicitacoes`:
+Informe `pontoId` **ou** `latitude`/`longitude`. Ajuste `categoriaId` conforme o `GET /api/categorias`.
+
+`POST /api/solicitacoes` — bueiro (Moema / Zona Sul):
 
 ```json
 {
   "categoriaId": 1,
-  "titulo": "Bueiro entupido",
-  "descricao": "Água acumulada na sarjeta",
+  "titulo": "Bueiro entupido na Av. Ibirapuera",
+  "descricao": "Água acumulada na sarjeta após chuva; risco de alagamento no cruzamento.",
   "pontoId": null,
-  "latitude": -23.65,
-  "longitude": -46.75
+  "latitude": -23.6015,
+  "longitude": -46.6608
 }
 ```
 
-Informe `pontoId` **ou** `latitude`/`longitude`.
-
-`PATCH .../status`:
+`POST /api/solicitacoes` — boca de lobo (Brooklin):
 
 ```json
-{ "statusNovo": "EM_VISTORIA", "observacao": "Equipe a caminho" }
+{
+  "categoriaId": 2,
+  "titulo": "Boca de lobo obstruída na Rua Verbo Divino",
+  "descricao": "Folhas e entulho bloqueando a grade; rua parcialmente intransitável.",
+  "pontoId": null,
+  "latitude": -23.6241,
+  "longitude": -46.6987
+}
+```
+
+`PUT /api/solicitacoes/{id}` — edição (só se status `RECEBIDA`):
+
+```json
+{
+  "titulo": "Bueiro entupido — atualizado com foto no app",
+  "descricao": "Confirmei o ponto: em frente ao número 1200, água sobe na calçada."
+}
+```
+
+`PATCH /api/solicitacoes/{id}/status` — gestor inicia vistoria:
+
+```json
+{
+  "statusNovo": "EM_VISTORIA",
+  "observacao": "Equipe de zeladoria a caminho (turno da manhã)."
+}
+```
+
+`PATCH .../status` — gestor conclui:
+
+```json
+{
+  "statusNovo": "CONCLUIDA",
+  "observacao": "Desobstrução concluída; teste com água ok."
+}
 ```
 
 Status válidos: `RECEBIDA`, `EM_VISTORIA`, `CONCLUIDA`, `CANCELADA`.
@@ -403,8 +459,6 @@ Status válidos: `RECEBIDA`, `EM_VISTORIA`, `CONCLUIDA`, `CANCELADA`.
 ---
 
 ## 7. Guia de testes no Swagger
-
-### Checklist rápido (demo / professor)
 
 1. Colar credenciais do `IDENTIFICACAO_GRUPO.txt` no `appsettings.Development.json`
 2. `dotnet run --project src/HidroBairro.API --launch-profile http`
@@ -418,43 +472,63 @@ Status válidos: `RECEBIDA`, `EM_VISTORIA`, `CONCLUIDA`, `CANCELADA`.
 
 ### Passo a passo sugerido
 
-**Passo 1 — Token local**
+**Passo 1 — Token cidadão**
 
 `POST /api/auth/dev-token`
 
 ```json
-{ "email": "EMAIL_EXISTENTE_EM_USUARIO_HB", "papel": "CIDADAO" }
+{ "email": "ana.ribeiro@email.com", "papel": "CIDADAO" }
 ```
 
 Authorize com o `accessToken`.
 
 **Passo 2 — Categorias**
 
-`GET /api/categorias` → anote um `id` de categoria.
+`GET /api/categorias` → anote um `id` (ex.: Bueiro / Boca de lobo).
 
 **Passo 3 — Criar solicitação**
 
 `POST /api/solicitacoes`  
-Header: `Idempotency-Key: demo-001`  
-Body: `categoriaId` + título/descrição + lat/long (ou `pontoId`).
+Header: `Idempotency-Key: demo-ana-001`  
+
+```json
+{
+  "categoriaId": 1,
+  "titulo": "Alagamento recorrente na Rua Domingos de Morais",
+  "descricao": "Bueiro sem vazão; água sobe na faixa de pedestre em chuva moderada.",
+  "latitude": -23.5928,
+  "longitude": -46.6352
+}
+```
 
 Esperado: **201**. Anote o `id`.
 
 **Passo 4 — Idempotência**
 
-Repita o mesmo POST com a **mesma** `Idempotency-Key` → **200**, mesmo `id`.
+Repita o mesmo POST com a **mesma** `Idempotency-Key: demo-ana-001` → **200**, mesmo `id`.
 
-**Passo 5 — Listar / detalhe / histórico**
+**Passo 5 — Listar / detalhe / histórico / editar**
 
 - `GET /api/solicitacoes`
 - `GET /api/solicitacoes/{id}`
 - `GET /api/solicitacoes/{id}/historico`
+- `PUT /api/solicitacoes/{id}` com título/descrição atualizados (só `RECEBIDA`)
 
-**Passo 6 — Gestor (opcional)**
+**Passo 6 — Gestor**
 
-`dev-token` com `"papel": "GESTOR"` e email de gestor no seed →  
+Novo `dev-token`:
+
+```json
+{ "email": "bruno.teixeira@email.com", "papel": "GESTOR" }
+```
+
+Authorize de novo →  
 `GET /api/solicitacoes?somenteDoUsuario=false` →  
-`PATCH /api/solicitacoes/{id}/status`.
+`PATCH /api/solicitacoes/{id}/status` com `EM_VISTORIA` (depois `CONCLUIDA`).
+
+**Passo 7 — Outro cidadão (403)**
+
+Token de `joao.mendes@email.com` → `GET /api/solicitacoes/{id}` do chamado da Ana → **403**.
 
 ### Cenários de erro
 
@@ -507,13 +581,13 @@ Também: rate limiting (429) como proteção operacional.
 ### Portal do Aluno
 
 1. Repositório GitHub com este README  
-2. `IDENTIFICACAO_GRUPO.txt` preenchido (integrantes + Oracle + JWT secret + JavaApiUrl + token opcional)  
-3. `.zip` = **link do GitHub** + o **`.txt`**
+2. `IDENTIFICACAO_GRUPO.txt` preenchido (integrantes + **link do GitHub** + Oracle + JWT secret + JavaApiUrl)  
+3. `.zip` = o **`.txt`**
 
 ### Observações finais
 
+- O produto CitizenTech é o **HidroBairro Sul** (risco + IA + zeladoria + app); este repo entrega só o bounded context de zeladoria em .NET.
 - Clean Architecture, DI, Repository + Unit of Work, `ServiceResult` → HTTP.
 - Oracle compartilhado com Java; .NET só migra as 3 tabelas de zeladoria.
-- JWT: Java emite, .NET valida; `dev-token` facilita correção.
+- JWT: Java emite, .NET valida; `dev-token` facilita correção sem depender do login Java.
 - Idempotência + Rate Limiting + Health (API, banco, serviço externo) + Swagger + xUnit atendem a rubrica da disciplina.
-- Valor CitizenTech: canal cidadão para zeladoria urbana no piloto Zona Sul (HidroBairro Sul).
