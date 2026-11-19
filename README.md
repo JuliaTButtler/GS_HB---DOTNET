@@ -170,7 +170,7 @@ HidroBairro.sln
 
 - .NET 8 SDK (`global.json` no repo)
 - Oracle FIAP (schema compartilhado com o Java; tabelas Java já criadas)
-- Valores de conexão / JWT / health Java no arquivo **`IDENTIFICACAO_GRUPO.txt`**
+- Valores de conexão / JWT no arquivo **`IDENTIFICACAO_GRUPO.txt`**
 
 ### Clonar
 
@@ -254,7 +254,9 @@ dotnet run --project src/HidroBairro.API --launch-profile http
 
 ## 4. Autenticação JWT
 
-Esta API **não faz login**. O Java emite o JWT; o .NET **valida** o mesmo token (secret Base64 compartilhado).
+Esta API **não faz login**. No produto, o **login/cadastro fica na API Java**, que emite o JWT; o .NET **só valida** o mesmo token (secret Base64 compartilhado — uma chave só para as duas APIs).
+
+Para a **correção desta disciplina**, use o `POST /api/auth/dev-token`: ele fabrica um JWT no **mesmo formato** (mesma chave, `sub`=email, `role`), sem depender do Java estar no ar.
 
 ### Contrato (alinhado ao Java)
 
@@ -318,19 +320,22 @@ Sugestões rápidas: cidadão → Carla / Ana / George · gestor → Bruno / Cam
 
 ### Authorize no Swagger
 
-1. Obtenha um token (**dev-token** ou login Java).
+1. Obtenha um token via **`POST /api/auth/dev-token`** (recomendado).
 2. Copie **somente** o valor `eyJ...` (sem escrever `Bearer `).
 3. Cadeado **Authorize** → colar → Authorize → Close.
 4. `GET /api/categorias` → **200**.
 
 Erro comum: colar `Bearer eyJ...` → vira `Bearer Bearer ...` → **401 invalid_token**.
 
-### Duas formas de testar
+### Token Java (opcional — não necessário na correção .NET)
 
-| Opção | Quando usar |
+No app real, o mobile faz **login na API Java** e reutiliza o JWT aqui (mesmo secret). Isso **não** é requisito da rubrica .NET.
+
+| Situação | O que esperar |
 |---|---|
-| **A — `dev-token`** | Correção / demo sem depender do Java |
-| **B — token Java** | Provar integração real (renovado a cada ~24h) |
+| Java **local** (com RabbitMQ local) | Login/Swagger Java costumam funcionar; token serve no Authorize .NET |
+| Java no **Render** | O Actuator pode responder `status: "DOWN"` porque o **RabbitMQ** não está provisionado na nuvem (só local). Swagger/login na URL pública podem falhar ou ficar instáveis |
+| Correção da disciplina .NET | Use sempre **`dev-token`** — independente do Java/Rabbit |
 
 Mutations e consultas de zeladoria exigem JWT (`CidadaoOuGestor`). Sem token → **401**.
 
@@ -463,16 +468,15 @@ Status válidos: `RECEBIDA`, `EM_VISTORIA`, `CONCLUIDA`, `CANCELADA`.
 1. Colar credenciais do `IDENTIFICACAO_GRUPO.txt` no `appsettings.Development.json`
 2. `dotnet run --project src/HidroBairro.API --launch-profile http`
 3. `dotnet test HidroBairro.sln` → verde
-4. `/health/live` → Healthy; `/health/ready` → `oracle` Healthy (+ `java-api`)
+4. `/health/live` → Healthy; `/health/ready` → `oracle` Healthy (`java-api` pode ficar Degraded se a Java no Render estiver DOWN — ver §9)
 5. Sem Authorize → `GET /api/categorias` → **401**
 6. `dev-token` → Authorize → `GET /api/categorias` → **200**
 7. `POST /api/solicitacoes` + `Idempotency-Key` → **201**; repetir key → **200**
-8. (Opcional) token Java no Authorize → mesmo fluxo
-9. Spam / limite baixo → **429**
+8. Spam / limite baixo → **429**
 
 ### Passo a passo sugerido
 
-**Passo 1 — Token cidadão**
+**Passo 1 — Token cidadão (`dev-token`)**
 
 `POST /api/auth/dev-token`
 
@@ -569,8 +573,10 @@ Os integration tests **não** dependem do Oracle nem do Java em execução.
 | `oracle` | `/health/ready` | Consegue abrir conexão via EF/`AppDbContext` |
 | `java-api` | `/health/ready` | HTTP GET em `HealthChecks:JavaApiUrl` |
 
-- URL da Java no `.txt` + `appsettings` (ex.: Actuator `/actuator/health` ou rota equivalente do grupo).
-- Sem URL ou Java offline → check `java-api` fica **Degraded** (ainda aparece no JSON; não impede uso da API se Oracle estiver Healthy).
+- URL da Java no `.txt` + `appsettings` (ex.: `https://hidrobairro-java-gs2.onrender.com/actuator/health`).
+- Sem URL, Java offline ou resposta de erro → check `java-api` fica **Degraded** (ainda aparece no JSON; **não impede** uso da zeladoria se `oracle` estiver Healthy).
+- No Render, o Actuator da Java pode retornar `status: "DOWN"` mesmo com o processo no ar: o health agregado inclui **RabbitMQ**, configurado só em ambiente local (sem broker na nuvem). Isso é limitação do deploy Java, não desta API .NET.
+- A correção .NET **não depende** do Java estar UP: autenticação via `dev-token`, Oracle FIAP e Swagger desta API bastam.
 
 Também: rate limiting (429) como proteção operacional.
 
@@ -589,5 +595,6 @@ Também: rate limiting (429) como proteção operacional.
 - O produto CitizenTech é o **HidroBairro Sul** (risco + IA + zeladoria + app); este repo entrega só o bounded context de zeladoria em .NET.
 - Clean Architecture, DI, Repository + Unit of Work, `ServiceResult` → HTTP.
 - Oracle compartilhado com Java; .NET só migra as 3 tabelas de zeladoria.
-- JWT: Java emite, .NET valida; `dev-token` facilita correção sem depender do login Java.
+- JWT: no produto o Java emite no login; o .NET valida o mesmo secret. Na correção use `dev-token` (Java/Rabbit no Render podem estar DOWN).
 - Idempotência + Rate Limiting + Health (API, banco, serviço externo) + Swagger + xUnit atendem a rubrica da disciplina.
+- Uso de IA no desenvolvimento: Foi usada a assistente de IA (Cursor) como apoio no dia a dia: rascunhar estrutura Clean Architecture / Minimal APIs, reforçar testes xUnit, revisar README e checar a rubrica (JWT, idempotência, rate limit, health). As decisões de produto e de domínio (zeladoria vs risco Java, Oracle compartilhado, contratos de JWT, personas e jornada do piloto Zona Sul) foram definidas pelo grupo; orientamos o que implementar, validamos no Swagger/Oracle com dados reais de usuários e categorias, ajustamos o que não batia com a especificação e preparamos o roteiro da demonstração. A IA acelerou boilerplate e cobertura de testes; a coerência com o CitizenTech e a entrega rodando foram responsabilidade nossa.
